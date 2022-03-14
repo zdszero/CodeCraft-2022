@@ -1,0 +1,6 @@
+Debug
+release
+compile_commands.json
+bin
+.clangd
+.cache
