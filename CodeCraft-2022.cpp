@@ -13,6 +13,8 @@ class SystemManager {
             fclose(output_fp_);
         }
     }
+    
+    // 初始化系统模块
     void Init() {
         file_parser_.ParseSites(sites_);
         file_parser_.ParseConfig(qos_constraint_);
@@ -23,6 +25,8 @@ class SystemManager {
                 sites_[site_idx].IncRefTimes();
             }
         }
+        // @TODO: 考虑根据服务器的remain_bandwidth动态地分配ratio
+        // 计算所有client的可以访问到的每个server的分配ratio
         for (size_t i = 0; i < clients_.size(); i++) {
             double sum = 0;
             auto &client = clients_[i];
@@ -37,20 +41,14 @@ class SystemManager {
                            sum);
             }
         }
-        /* for (size_t i = 0; i < clients_.size(); i++) { */
-        /*     double sum = 0; */
-        /*     const auto &c = clients_[i]; */
-        /*     for (size_t j = 0; j < c.GetSiteCount(); j++) { */
-        /*         sum += c.GetRatio(j); */
-        /*     } */
-        /*     printf("%.2f\n", sum); */
-        /* } */
     }
 
     // 获取第i个client的第j个边缘结点
     Site &GetSite(int i, int j) { return sites_[clients_[i].GetSiteIndex(j)]; }
 
+    // 对于每一个时间戳的请求进行调度
     void Schedule(const std::vector<int> &demand) {
+        // @TODO：修复可能导致死循环bug
         for (size_t i = 0; i < demand.size(); i++) {
             // client node i
             auto &client = clients_[i];
@@ -88,6 +86,7 @@ class SystemManager {
         WriteSchedule();
     }
 
+    // 不断读取时间戳的请求并且处理
     void Process() {
         std::vector<int> demand;
         while (file_parser_.ParseDemand(clients_.size(), demand)) {
@@ -95,6 +94,7 @@ class SystemManager {
         }
     }
 
+    // 向/output/solution.txt中写出结果
     void WriteSchedule() {
         for (size_t i = 0; i < clients_.size(); i++) {
             fprintf(output_fp_, "%s:", clients_[i].GetName());

@@ -19,7 +19,7 @@ class Site {
 
   private:
     std::string name_;
-    int ref_times_{0};
+    int ref_times_{0}; // 可以被多少个client访问
     int total_bandwidth_{0};
     int remain_bandwidth{0};
 };

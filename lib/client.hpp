@@ -32,7 +32,7 @@ class Client {
 
   private:
     std::string name_;
-    std::vector<int> accessible_sites_;
-    std::vector<int> allocation_table_;
-    std::vector<double> ratios_;
+    std::vector<int> accessible_sites_; // 可以访问到的服务器集合
+    std::vector<int> allocation_table_; // 在一次请求中分配到每个服务器的流量值
+    std::vector<double> ratios_; // 分配流量的衡量变量
 };

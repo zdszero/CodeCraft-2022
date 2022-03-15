@@ -16,6 +16,7 @@ class FileParser {
         }
     }
 
+    // 读取/data/site_bandwidth文件，添加到sites数组中
     void ParseSites(std::vector<Site> &sites) {
         FILE *fp = fopen(site_filename_.c_str(), "r");
         std::vector<int> res;
@@ -28,6 +29,7 @@ class FileParser {
         fclose(fp);
     }
 
+    // 读取qos_contraint
     void ParseConfig(int &constraint) {
         FILE *fp = fopen(config_filename_.c_str(), "r");
         fscanf(fp, "%*[^\n]\n");
@@ -35,6 +37,7 @@ class FileParser {
         fclose(fp);
     }
 
+    // 读取/data/qos.csv文件，创建clients数组
     void ParseQOS(std::vector<Client> &clients, int qos_constraint) {
         FILE *fp = fopen(qos_filename_.c_str(), "r");
         char buf[30];
@@ -47,6 +50,7 @@ class FileParser {
         // i表示site的下标
         for (int i = 0;; i++) {
             fscanf(fp, "%*[^,]");
+            // 向每个client中添加满足qos限制的服务器
             for (size_t j = 0; j < clients.size(); j++) {
                 fscanf(fp, ",%d", &qos);
                 if (qos < qos_constraint) {
@@ -66,6 +70,7 @@ class FileParser {
         fclose(fp);
     }
 
+    // 读取下一个时间戳的用户节点的需求
     bool ParseDemand(int client_count, std::vector<int> &demand) {
         if (demand_fp_ == nullptr) {
             demand_fp_ = fopen(demand_filename_.c_str(), "r");
