@@ -16,6 +16,7 @@ class Site {
     int GetTotalBandwidth() const { return total_bandwidth_; }
     int GetRemainBandwidth() const { return remain_bandwidth; }
     void DecreaseBandwith(int usage) { remain_bandwidth -= usage; }
+    void ResetRemainBandwidth() { remain_bandwidth = total_bandwidth_; }
 
   private:
     std::string name_;

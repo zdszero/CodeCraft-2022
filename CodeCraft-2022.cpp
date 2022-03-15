@@ -13,7 +13,7 @@ class SystemManager {
             fclose(output_fp_);
         }
     }
-    
+
     // 初始化系统模块
     void Init() {
         file_parser_.ParseSites(sites_);
@@ -25,21 +25,23 @@ class SystemManager {
                 sites_[site_idx].IncRefTimes();
             }
         }
-        // @TODO: 考虑根据服务器的remain_bandwidth动态地分配ratio
-        // 计算所有client的可以访问到的每个server的分配ratio
-        for (size_t i = 0; i < clients_.size(); i++) {
-            double sum = 0;
-            auto &client = clients_[i];
-            for (size_t j = 0; j < client.GetSiteCount(); j++) {
-                const auto &site = GetSite(i, j);
-                sum += (1.0 / site.GetRefTimes() * site.GetTotalBandwidth());
-            }
-            for (size_t j = 0; j < client.GetSiteCount(); j++) {
-                const auto &site = GetSite(i, j);
-                client.SetRatio(
-                    j, (1.0 / site.GetRefTimes() * site.GetTotalBandwidth()) /
-                           sum);
-            }
+    }
+
+    // 根据服务器的当前容量，以及被访问次数，动态计算流量分配ratio
+    void SetClientRatio(int i) {
+        auto &client = clients_[i];
+        double sum = 0;
+        std::vector<double> inter_values(client.GetSiteCount());
+        for (size_t j = 0; j < client.GetSiteCount(); j++) {
+            const auto &site = GetSite(i, j);
+            inter_values[j] =
+                (1.0 / site.GetRefTimes() * site.GetRemainBandwidth());
+            sum += inter_values[j];
+        }
+        // 当前client的所有可以访问的节点都没有剩余容量了，寄！
+        assert(sum != 0);
+        for (size_t j = 0; j < client.GetSiteCount(); j++) {
+            client.SetRatio(j, inter_values[j] / sum);
         }
     }
 
@@ -47,8 +49,12 @@ class SystemManager {
     Site &GetSite(int i, int j) { return sites_[clients_[i].GetSiteIndex(j)]; }
 
     // 对于每一个时间戳的请求进行调度
+    // @TODO：修复可能导致死循环bug
     void Schedule(const std::vector<int> &demand) {
-        // @TODO：修复可能导致死循环bug
+        // 重设所有server的剩余流量
+        for (auto &site : sites_) {
+            site.ResetRemainBandwidth();
+        }
         for (size_t i = 0; i < demand.size(); i++) {
             // client node i
             auto &client = clients_[i];
@@ -56,16 +62,17 @@ class SystemManager {
             if (cur_demand == 0) {
                 continue;
             }
-            for (;;) {
+            while (true) {
+                // 每次循环重设retio避免死循环
+                SetClientRatio(i);
                 int total = 0;
                 int tmp;
                 size_t j;
+                // for every server j
                 for (j = 0; j < client.GetSiteCount() - 1; j++) {
                     auto &site = GetSite(i, j);
                     tmp = static_cast<int>(client.GetRatio(j) * cur_demand);
-                    if (tmp > site.GetRemainBandwidth()) {
-                        tmp = site.GetRemainBandwidth();
-                    }
+                    tmp = std::min(tmp, site.GetRemainBandwidth());
                     client.SetSiteAllocation(j, tmp);
                     total += tmp;
                     site.DecreaseBandwith(tmp);
@@ -73,14 +80,13 @@ class SystemManager {
                 // the last one should be calculated by substraction
                 auto &site = GetSite(i, j);
                 tmp = cur_demand - total;
-                if (tmp <= site.GetRemainBandwidth()) {
-                    client.SetSiteAllocation(j, tmp);
-                    site.DecreaseBandwith(tmp);
+                tmp = std::min(tmp, site.GetRemainBandwidth());
+                client.SetSiteAllocation(j, tmp);
+                total += tmp;
+                site.DecreaseBandwith(tmp);
+                if (total == cur_demand) {
                     break;
                 }
-                client.SetSiteAllocation(j, site.GetRemainBandwidth());
-                cur_demand = tmp - site.GetRemainBandwidth();
-                site.DecreaseBandwith(site.GetRemainBandwidth());
             }
         }
         WriteSchedule();
