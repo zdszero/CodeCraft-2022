@@ -41,7 +41,8 @@ class SystemManager {
       for (size_t j = 0; j < accessible_sites_[i].size(); j++) {
         int site_idx = accessible_sites_[i][j];
         ratios_[i].push_back(
-            (1.0 / site_ref_times_[site_idx] * site_bandwidth_[site_idx]) / sum);
+            (1.0 / site_ref_times_[site_idx] * site_bandwidth_[site_idx]) /
+            sum);
       }
     }
     /* assert(ratios_.size() == accessible_sites_.size()); */
@@ -57,9 +58,17 @@ class SystemManager {
   void Schedule(const std::vector<int> &demand) {
     std::vector<int> remain_bandwidth(site_bandwidth_);
     std::vector<std::vector<int>> allocation_table(accessible_sites_);
+    for (auto &v : allocation_table) {
+      for (auto &e : v) {
+        e = 0;
+      }
+    }
     for (size_t i = 0; i < demand.size(); i++) {
       // client node i
       int cur_demand = demand[i];
+      if (cur_demand == 0) {
+        continue;
+      }
       for (;;) {
         size_t j = 0;
         int total = 0;
@@ -70,6 +79,7 @@ class SystemManager {
           tmp = static_cast<int>(ratios_[i][j] * cur_demand);
           if (tmp > remain_bandwidth[site_idx]) {
             tmp = remain_bandwidth[site_idx];
+            printf("site %s is full\n", site_names_[site_idx].c_str());
           }
           allocation_table[i][j] = tmp;
           total += tmp;
@@ -93,8 +103,8 @@ class SystemManager {
 
   void Process() {
     std::vector<int> demand;
-    while (file_parser_.ParseDemand("/data/demand.csv", clients_count_,
-                                    demand)) {
+    while (
+        file_parser_.ParseDemand("/data/demand.csv", clients_count_, demand)) {
       assert(demand.size() == client_names_.size());
       Schedule(demand);
     }
@@ -108,8 +118,10 @@ class SystemManager {
         if (j > 0) {
           fprintf(output_fp_, ",");
         }
-        fprintf(output_fp_, "<%s,%d>", site_names_[site_idx].c_str(),
-                allocation_table[i][j]);
+        if (allocation_table[i][j] > 0) {
+          fprintf(output_fp_, "<%s,%d>", site_names_[site_idx].c_str(),
+                  allocation_table[i][j]);
+        }
       }
       fprintf(output_fp_, "\n");
     }
