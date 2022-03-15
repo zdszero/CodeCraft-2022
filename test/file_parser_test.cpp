@@ -53,10 +53,15 @@ void test_parse_demand() {
     printf("\n");
 }
 
+void test_count_lines() {
+    FileParser file_parser;
+    assert(file_parser.GetDemandsCount() == 100);
+}
+
 int main() {
     /* test_parse_sites(); */
     /* test_parse_config(); */
     /* test_parse_qos(); */
-    test_parse_demand();
+    /* test_parse_demand(); */
     return 0;
 }

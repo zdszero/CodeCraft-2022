@@ -96,6 +96,18 @@ class FileParser {
         fscanf(demand_fp_, "\n");
         return true;
     }
+    
+    int GetDemandsCount() {
+        FILE *fp = fopen(demand_filename_.c_str(), "r");
+        int res = 0;
+        int c;
+        while ((c = fgetc(fp)) != EOF) {
+            if (c == '\n') {
+                res++;
+            }
+        }
+        return res;
+    }
 
   private:
     bool flag{false};
