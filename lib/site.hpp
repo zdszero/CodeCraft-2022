@@ -11,6 +11,9 @@ class Site {
     Site(const std::string &name, int bandwidth)
         : name_(name), total_bandwidth_(bandwidth),
           remain_bandwidth(bandwidth) {}
+    Site(const std::string &name, int bandwidth, std::vector<int> &&ref_clients)
+        : name_(name), ref_clients_(std::move(ref_clients)),
+          total_bandwidth_(bandwidth), remain_bandwidth(bandwidth) {}
     const char *GetName() const { return name_.c_str(); }
     int GetRefTimes() const { return ref_times_; }
     void AddRefClient(int client_id) {

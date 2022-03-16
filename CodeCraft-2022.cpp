@@ -1,17 +1,30 @@
 #include <iostream>
 #include <cassert>
+<<<<<<< HEAD
 #include <list>
 #include <numeric>
 #include <cmath>
+=======
+#include <cmath>
+#include <iostream>
+#include <list>
+#include <numeric>
+>>>>>>> master
 
 #include "file_parser.hpp"
 
 #define ll long long
 
+<<<<<<< HEAD
 template <typename T>
 void print_vec(std::vector<T> &v) {
     for (T val : v) {
         std::cout << v << " ";
+=======
+template <typename T> void print_vec(std::vector<T> &v) {
+    for (T val : v) {
+        std::cout << val << " ";
+>>>>>>> master
     }
     std::cout << std::endl;
 }
@@ -125,7 +138,12 @@ void SystemManager::Schedule(std::vector<int> &demand) {
 
 void SystemManager::GreedyAllocate(std::vector<int> &demand) {
     ll cur_demand_all = std::accumulate(demand.begin(), demand.end(), 0);
+<<<<<<< HEAD
     int cur_full_times = static_cast<int>(round(cur_demand_all / avg_demand_ * each_time_full_times_));
+=======
+    int cur_full_times = static_cast<int>(
+        round(cur_demand_all / avg_demand_ * each_time_full_times_));
+>>>>>>> master
     for (int i = 0; i < cur_full_times; i++) {
         auto &site = sites_[next_full_idx_];
         if (!site.IsSafe()) {
@@ -170,7 +188,12 @@ void SystemManager::AverageAllocate(std::vector<int> &demand) {
                 if (site.GetRemainBandwidth() == 0) {
                     continue;
                 }
+<<<<<<< HEAD
                 if (cur_demand < 100 && cur_demand <= site.GetRemainBandwidth()) {
+=======
+                if (cur_demand < 100 &&
+                    cur_demand <= site.GetRemainBandwidth()) {
+>>>>>>> master
                     site.DecreaseBandwith(cur_demand);
                     demand[i] = 0;
                     client.AddAllocation(j, cur_demand);
@@ -194,12 +217,19 @@ void SystemManager::AverageAllocate(std::vector<int> &demand) {
                 break;
             }
         }
+<<<<<<< HEAD
 finish:
         ;
     }
 }
 
 
+=======
+    finish:;
+    }
+}
+
+>>>>>>> master
 void SystemManager::ReadDemands() {
     std::vector<int> demand;
     while (file_parser_.ParseDemand(clients_.size(), demand)) {
