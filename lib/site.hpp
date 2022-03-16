@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 class Site {
     friend class FileParser;
@@ -12,15 +13,25 @@ class Site {
           remain_bandwidth(bandwidth) {}
     const char *GetName() const { return name_.c_str(); }
     int GetRefTimes() const { return ref_times_; }
-    void IncRefTimes() { ref_times_++; }
+    void AddRefClient(int client_id) {
+        ref_clients_.push_back(client_id);
+        ref_times_++;
+    }
     int GetTotalBandwidth() const { return total_bandwidth_; }
     int GetRemainBandwidth() const { return remain_bandwidth; }
     void DecreaseBandwith(int usage) { remain_bandwidth -= usage; }
     void ResetRemainBandwidth() { remain_bandwidth = total_bandwidth_; }
+    const std::vector<int> &GetRefClients() const { return ref_clients_; }
+    void SetMaxFullTimes(int times) { max_full_times_ = times; }
+    void IncFullTimes() { cur_full_times_--; }
+    bool IsSafe() const { return cur_full_times_ < max_full_times_; }
 
   private:
     std::string name_;
     int ref_times_{0}; // 可以被多少个client访问
+    std::vector<int> ref_clients_;
     int total_bandwidth_{0};
     int remain_bandwidth{0};
+    int max_full_times_{0};
+    int cur_full_times_{0};
 };
