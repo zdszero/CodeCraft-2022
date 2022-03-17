@@ -128,6 +128,9 @@ void SystemManager::Schedule(std::vector<int> &demand) {
         assert(d == 0);
     }
     for (size_t i = 0; i < clients_.size(); i++) {
+        if (clients_[i].GetTotalAllocation() != demand[i]) {
+            printf("%ldth client, total alocation: %d, demand: %d\n", i, clients_[i].GetTotalAllocation(), demand[i]);
+        }
         assert(clients_[i].GetTotalAllocation() == demand[i]);
     }
     WriteSchedule();
@@ -140,31 +143,31 @@ void SystemManager::GreedyAllocate(std::vector<int> &demand) {
     if (cur_full_times == 0) {
         return;
     }
-    int min_full_times = INT32_MAX;
-    int min_full_idx = -1;
-    for (size_t i = 0; i < sites_.size(); i++) {
-        if (sites_[i].GetFullTimes() < min_full_times) {
-            min_full_times = sites_[i].GetFullTimes();
-            min_full_idx = i;
+    for (int full_times = 0; full_times < cur_full_times; full_times++) {
+        int max_site_sum = 0;
+        int max_site_idx = -1;
+        for (size_t i = 0; i < sites_.size(); i++) {
+            if (!sites_[i].IsSafe()) {
+                return;
+            }
+            int cur_sum = 0;
+            for (int cli_idx : sites_[i].GetRefClients()) {
+                cur_sum += demand[cli_idx];
+            }
+            if (std::min(cur_sum, sites_[i].GetRemainBandwidth()) > max_site_sum) {
+                max_site_sum = cur_sum;
+                max_site_idx = i;
+            }
         }
-    }
-    /* printf("min full times = %d\n", min_full_times); */
-    /* printf("min full idx = %d\n", min_full_idx); */
-    auto providers =
-        set_comparator_->IrrelevantSites(min_full_idx, cur_full_times);
-    /* print_vec(providers); */
-    for (int i : providers) {
-        auto &site = sites_[i];
+        assert(max_site_idx != -1);
+        auto &site = sites_[max_site_idx];
         assert(site.IsSafe());
-        /* if (!site.IsSafe()) { */
-        /*     continue; */
-        /* } */
         for (int c : site.GetRefClients()) {
             if (demand[c] == 0) {
                 continue;
             }
             int allocated = std::min(site.GetRemainBandwidth(), demand[c]);
-            assert(clients_[c].SetAllocationBySite(i, allocated));
+            assert(clients_[c].SetAllocationBySite(max_site_idx, allocated));
             demand[c] -= allocated;
             site.DecreaseBandwith(allocated);
             if (site.GetRemainBandwidth() == 0) {
