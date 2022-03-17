@@ -138,8 +138,7 @@ void SystemManager::Schedule(std::vector<int> &demand) {
 
 void SystemManager::GreedyAllocate(std::vector<int> &demand) {
     ll cur_demand_all = std::accumulate(demand.begin(), demand.end(), 0);
-    int cur_full_times = static_cast<int>(
-        cur_demand_all / avg_demand_ * each_time_full_count_) + 1;
+    int cur_full_times = static_cast<int>(cur_demand_all / avg_demand_ * each_time_full_count_) + 1;
     if (cur_full_times == 0) {
         return;
     }
@@ -148,7 +147,7 @@ void SystemManager::GreedyAllocate(std::vector<int> &demand) {
         int max_site_idx = -1;
         for (size_t i = 0; i < sites_.size(); i++) {
             if (!sites_[i].IsSafe()) {
-                return;
+                continue;
             }
             int cur_sum = 0;
             for (int cli_idx : sites_[i].GetRefClients()) {
@@ -159,7 +158,10 @@ void SystemManager::GreedyAllocate(std::vector<int> &demand) {
                 max_site_idx = i;
             }
         }
-        assert(max_site_idx != -1);
+        /* printf("choose server %d\n", max_site_idx); */
+        if (max_site_idx == -1) {
+            break;
+        }
         auto &site = sites_[max_site_idx];
         assert(site.IsSafe());
         for (int c : site.GetRefClients()) {
@@ -235,9 +237,9 @@ void SystemManager::ReadDemands() {
         demands_.push_back(demand);
     }
     avg_demand_ = total_demand_ / demands_.size();
-    int full_times = static_cast<int>(demands_.size() * 0.05) - 1;
+    int full_times = static_cast<int>(demands_.size() * 0.05);
     for (auto &site : sites_) {
-        site.SetMaxFullTimes(full_times);
+        site.SetMaxFullTimes(full_times - 1);
     }
     each_time_full_count_ = full_times * sites_.size() / demands_.size();
     printf("max full times = %d\n", full_times);
