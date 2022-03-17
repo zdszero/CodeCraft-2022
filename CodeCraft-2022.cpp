@@ -2,8 +2,8 @@
 #include <cmath>
 #include <iostream>
 #include <list>
-#include <numeric>
 #include <memory>
+#include <numeric>
 #include <random>
 
 #include "file_parser.hpp"
@@ -85,6 +85,12 @@ void SystemManager::Process() {
     for (auto &demand : demands_) {
         Schedule(demand);
     }
+    // print full times
+    printf("full times: ");
+    for (size_t i = 0; i < sites_.size(); i++) {
+        printf("ref count: %d, full times: %d\n", sites_[i].GetRefTimes(),
+               sites_[i].GetFullTimes());
+    }
 }
 
 void SystemManager::SetClientRatio(int i) {
@@ -130,21 +136,22 @@ void SystemManager::Schedule(std::vector<int> &demand) {
 void SystemManager::GreedyAllocate(std::vector<int> &demand) {
     ll cur_demand_all = std::accumulate(demand.begin(), demand.end(), 0);
     int cur_full_times = static_cast<int>(
-        round(cur_demand_all / avg_demand_ * each_time_full_count_));
+        cur_demand_all / avg_demand_ * each_time_full_count_) + 1;
     if (cur_full_times == 0) {
         return;
     }
-    int min_ref_times = INT32_MAX;
-    int min_ref_idx = -1;
+    int min_full_times = INT32_MAX;
+    int min_full_idx = -1;
     for (size_t i = 0; i < sites_.size(); i++) {
-        if (sites_[i].GetFullTimes() < min_ref_times) {
-            min_ref_times = sites_[i].GetRefTimes();
-            min_ref_idx = i;
+        if (sites_[i].GetFullTimes() < min_full_times) {
+            min_full_times = sites_[i].GetFullTimes();
+            min_full_idx = i;
         }
     }
-    /* printf("min ref times = %d\n", min_ref_times); */
-    /* printf("min ref idx = %d\n", min_ref_idx); */
-    auto providers = set_comparator_->IrrelevantSites(min_ref_idx, cur_full_times);
+    /* printf("min full times = %d\n", min_full_times); */
+    /* printf("min full idx = %d\n", min_full_idx); */
+    auto providers =
+        set_comparator_->IrrelevantSites(min_full_idx, cur_full_times);
     /* print_vec(providers); */
     for (int i : providers) {
         auto &site = sites_[i];
@@ -225,7 +232,7 @@ void SystemManager::ReadDemands() {
         demands_.push_back(demand);
     }
     avg_demand_ = total_demand_ / demands_.size();
-    int full_times = static_cast<int>(demands_.size() * 0.05) - 5;
+    int full_times = static_cast<int>(demands_.size() * 0.05) - 1;
     for (auto &site : sites_) {
         site.SetMaxFullTimes(full_times);
     }
