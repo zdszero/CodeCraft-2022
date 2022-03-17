@@ -14,7 +14,7 @@
 using std::vector;
 using matrix_t = std::vector<std::vector<double>>;
 
-// std::make_unique is upcoming in c++ 14
+// std::make_unique is not introduced in c++11
 template <typename T, typename... Args>
 std::unique_ptr<T> MakeUnique(Args &&...args) {
     return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
@@ -38,23 +38,8 @@ class SetCompartor {
     }
     // get the count most irrelevant sites
     vector<int> IrrelevantSites(int i, int count) const {
-        assert(count < size_);
         vector<int> res;
-        res.reserve(count);
-        vector<std::pair<int, double>> pairs;
-        for (size_t j = 0; j < size_; j++) {
-            pairs.push_back({j, GetElement(i, j)});
-        }
-        std::sort(pairs.begin(), pairs.end(),
-                  [](const std::pair<int, double> &lhs,
-                     const std::pair<int, double> &rhs) {
-                      return (lhs.second < rhs.second)
-                                 ? true
-                                 : (lhs.first < rhs.first);
-                  });
-        for (int i = 1; i < 1 + count; i++) {
-            res.push_back(pairs[i].first);
-        }
+        dfs(i, count, res);
         return res;
     }
 
@@ -80,6 +65,30 @@ class SetCompartor {
         return (1.0 * intersect_set.size() / union_set.size());
     }
 
-    double GetElement(size_t i, size_t j) const { return (*matrix_)[i][j]; }
-    void SetElement(size_t i, size_t j, double val) { (*matrix_)[i][j] = val; }
+    inline double GetElement(size_t i, size_t j) const {
+        return (*matrix_)[i][j];
+    }
+    inline void SetElement(size_t i, size_t j, double val) {
+        (*matrix_)[i][j] = val;
+    }
+    void dfs(int i, int count, vector<int> &res) const {
+        res.push_back(i);
+        if (res.size() >= count) {
+            return;
+        }
+        int min_idx = -1;
+        double min_val = 1.1;
+        for (int j = 0; j < static_cast<int>(matrix_->at(i).size()); j++) {
+            // find the smallest value
+            if (i == j || std::find(res.begin(), res.end(), j) != res.end()) {
+                continue;
+            }
+            if (GetElement(i, j) < min_val) {
+                min_val = GetElement(i, j);
+                min_idx = j;
+            }
+        }
+        assert(min_idx != -1);
+        dfs(min_idx, count, res);
+    }
 };
