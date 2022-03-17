@@ -100,7 +100,7 @@ void SystemManager::SetClientRatio(int i) {
     for (size_t j = 0; j < client.GetSiteCount(); j++) {
         const auto &site = GetSite(i, j);
         inter_values[j] =
-            (1.0 / site.GetRefTimes() * site.GetRemainBandwidth());
+            (1.0 / site.GetRefTimes() * site.GetRemainBandwidth() / site.GetTotalBandwidth());
         sum += inter_values[j];
     }
     // 当前client的所有可以访问的节点都没有剩余容量了，寄！
