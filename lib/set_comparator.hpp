@@ -25,6 +25,7 @@ class SetCompartor {
     SetCompartor() = default;
     SetCompartor(const std::vector<Site> &sites) {
         size_ = sites.size();
+        sites_ = &sites;
         matrix_ = MakeUnique<matrix_t>(
             vector<vector<double>>(size_, vector<double>(size_, 0)));
         for (size_t i = 0; i < sites.size(); i++) {
@@ -54,6 +55,7 @@ class SetCompartor {
   private:
     std::unique_ptr<matrix_t> matrix_{nullptr};
     size_t size_{0};
+    const std::vector<Site> *sites_{nullptr};
 
     double SetSimilarity(const vector<int> &l, const vector<int> &r) {
         std::vector<int> union_set;
@@ -73,14 +75,15 @@ class SetCompartor {
     }
     void dfs(int i, int count, vector<int> &res) const {
         res.push_back(i);
-        if (res.size() >= count) {
+        if (res.size() >= static_cast<size_t>(count)) {
             return;
         }
         int min_idx = -1;
         double min_val = 1.1;
         for (int j = 0; j < static_cast<int>(matrix_->at(i).size()); j++) {
             // find the smallest value
-            if (i == j || std::find(res.begin(), res.end(), j) != res.end()) {
+            if (i == j || !sites_->at(j).IsSafe() ||
+                std::find(res.begin(), res.end(), j) != res.end()) {
                 continue;
             }
             if (GetElement(i, j) < min_val) {

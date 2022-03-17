@@ -3,8 +3,11 @@
 #include <iostream>
 #include <list>
 #include <numeric>
+#include <memory>
+#include <random>
 
 #include "file_parser.hpp"
+#include "set_comparator.hpp"
 
 #define ll long long
 
@@ -40,8 +43,9 @@ class SystemManager {
     std::vector<std::vector<int>> demands_;
     ll total_demand_{0};
     ll avg_demand_;
-    int each_time_full_times_;
+    int each_time_full_count_;
     int next_full_idx_{0};
+    std::unique_ptr<SetCompartor> set_comparator_{nullptr};
 
     // 根据服务器的当前容量，以及被访问次数，动态计算流量分配ratio
     void SetClientRatio(int i);
@@ -69,6 +73,7 @@ void SystemManager::Init() {
             sites_[site_idx].AddRefClient(i);
         }
     }
+    set_comparator_ = MakeUnique<SetCompartor>(sites_);
     ReadDemands();
 }
 
@@ -125,19 +130,34 @@ void SystemManager::Schedule(std::vector<int> &demand) {
 void SystemManager::GreedyAllocate(std::vector<int> &demand) {
     ll cur_demand_all = std::accumulate(demand.begin(), demand.end(), 0);
     int cur_full_times = static_cast<int>(
-        round(cur_demand_all / avg_demand_ * each_time_full_times_));
-    for (int i = 0; i < cur_full_times; i++) {
-        auto &site = sites_[next_full_idx_];
-        if (!site.IsSafe()) {
-            next_full_idx_ = (next_full_idx_ + 1) % sites_.size();
-            continue;
+        round(cur_demand_all / avg_demand_ * each_time_full_count_));
+    if (cur_full_times == 0) {
+        return;
+    }
+    int min_ref_times = INT32_MAX;
+    int min_ref_idx = -1;
+    for (size_t i = 0; i < sites_.size(); i++) {
+        if (sites_[i].GetFullTimes() < min_ref_times) {
+            min_ref_times = sites_[i].GetRefTimes();
+            min_ref_idx = i;
         }
+    }
+    /* printf("min ref times = %d\n", min_ref_times); */
+    /* printf("min ref idx = %d\n", min_ref_idx); */
+    auto providers = set_comparator_->IrrelevantSites(min_ref_idx, cur_full_times);
+    /* print_vec(providers); */
+    for (int i : providers) {
+        auto &site = sites_[i];
+        assert(site.IsSafe());
+        /* if (!site.IsSafe()) { */
+        /*     continue; */
+        /* } */
         for (int c : site.GetRefClients()) {
             if (demand[c] == 0) {
                 continue;
             }
             int allocated = std::min(site.GetRemainBandwidth(), demand[c]);
-            assert(clients_[c].SetAllocationBySite(next_full_idx_, allocated));
+            assert(clients_[c].SetAllocationBySite(i, allocated));
             demand[c] -= allocated;
             site.DecreaseBandwith(allocated);
             if (site.GetRemainBandwidth() == 0) {
@@ -145,7 +165,6 @@ void SystemManager::GreedyAllocate(std::vector<int> &demand) {
             }
         }
         site.IncFullTimes();
-        next_full_idx_ = (next_full_idx_ + 1) % sites_.size();
     }
 }
 
@@ -206,12 +225,13 @@ void SystemManager::ReadDemands() {
         demands_.push_back(demand);
     }
     avg_demand_ = total_demand_ / demands_.size();
-    int full_times = static_cast<int>(demands_.size() * 0.04);
+    int full_times = static_cast<int>(demands_.size() * 0.05) - 5;
     for (auto &site : sites_) {
         site.SetMaxFullTimes(full_times);
     }
-    each_time_full_times_ = full_times * sites_.size() / demands_.size();
-    printf("each full times = %d\n", each_time_full_times_);
+    each_time_full_count_ = full_times * sites_.size() / demands_.size();
+    printf("max full times = %d\n", full_times);
+    printf("each time full count = %d\n", each_time_full_count_);
     printf("total demand = %lld\n", total_demand_);
     printf("average demand = %lld\n", avg_demand_);
 }

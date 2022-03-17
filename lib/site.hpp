@@ -26,6 +26,7 @@ class Site {
     void ResetRemainBandwidth() { remain_bandwidth = total_bandwidth_; }
     const std::vector<int> &GetRefClients() const { return ref_clients_; }
     void SetMaxFullTimes(int times) { max_full_times_ = times; }
+    int GetFullTimes() { return cur_full_times_; }
     void IncFullTimes() { cur_full_times_--; }
     bool IsSafe() const { return cur_full_times_ < max_full_times_; }
 
