@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cassert>
 #include <cmath>
 #include <iostream>
@@ -42,6 +43,7 @@ class SystemManager {
     ll total_demand_{0};
     ll avg_demand_;
     ll max_demand_{0};
+    ll mid_demand_;
     int all_full_times_;
 
     // 根据服务器的当前容量，以及被访问次数，动态计算流量分配ratio
@@ -148,11 +150,11 @@ void SystemManager::Schedule(std::vector<int> &demand) {
 
 int SystemManager::GetFullTimes(const std::vector<int> &demand) {
     ll cur_demand = std::accumulate(demand.begin(), demand.end(), 0);
-    if (cur_demand <= avg_demand_) {
+    if (cur_demand <= mid_demand_) {
         return 0;
     }
     double K = 8.0 * all_full_times_ / pow(demands_.size(), 2);
-    return static_cast<int>(K * (cur_demand - avg_demand_) / (max_demand_ - avg_demand_) * 0.5 * demands_.size());
+    return static_cast<int>(K * (cur_demand - mid_demand_) / (max_demand_ - mid_demand_) * 0.5 * demands_.size());
 }
 
 void SystemManager::GreedyAllocate(std::vector<int> &demand) {
@@ -251,14 +253,18 @@ void SystemManager::AverageAllocate(std::vector<int> &demand) {
 
 void SystemManager::ReadDemands() {
     std::vector<int> demand;
+    std::vector<ll> v;
     while (file_parser_.ParseDemand(clients_.size(), demand)) {
         ll demand_sum = std::accumulate(demand.begin(), demand.end(), 0);
+        v.push_back(demand_sum);
         total_demand_ += demand_sum;
         demands_.push_back(demand);
         if (demand_sum > max_demand_) {
             max_demand_ = demand_sum;
         }
     }
+    std::sort(v.begin(), v.end());
+    mid_demand_ = v[v.size() / 2];
     avg_demand_ = total_demand_ / demands_.size();
     int site_full_times = static_cast<int>(demands_.size() * 0.05);
     for (auto &site : sites_) {
@@ -269,6 +275,7 @@ void SystemManager::ReadDemands() {
     printf("site max full times = %d\n", site_full_times);
     printf("total demand = %lld\n", total_demand_);
     printf("average demand = %lld\n", avg_demand_);
+    printf("mid demand = %lld\n", mid_demand_);
     printf("max demand = %lld\n", max_demand_);
 }
 
