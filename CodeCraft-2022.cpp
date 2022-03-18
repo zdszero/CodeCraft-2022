@@ -7,7 +7,6 @@
 #include <random>
 
 #include "file_parser.hpp"
-#include "set_comparator.hpp"
 
 #define ll long long
 
@@ -44,11 +43,9 @@ class SystemManager {
     ll total_demand_{0};
     ll avg_demand_;
     int each_time_full_count_;
-    int next_full_idx_{0};
-    std::unique_ptr<SetCompartor> set_comparator_{nullptr};
 
     // 根据服务器的当前容量，以及被访问次数，动态计算流量分配ratio
-    void SetClientRatio(int i);
+    void SetClientRatio(int i, const std::vector<int> &demand);
     // 对于每一个时间戳的请求进行调度
     void Schedule(std::vector<int> &demand);
     // 贪心将可以分配满的site先分配满
@@ -61,6 +58,7 @@ class SystemManager {
     void ReadDemands();
     // 向/output/solution.txt中写出结果
     void WriteSchedule();
+    ll GetSiteTotalDemand(const Site &site, const std::vector<int> &demand);
 };
 
 void SystemManager::Init() {
@@ -73,7 +71,6 @@ void SystemManager::Init() {
             sites_[site_idx].AddRefClient(i);
         }
     }
-    set_comparator_ = MakeUnique<SetCompartor>(sites_);
     ReadDemands();
 }
 
@@ -93,14 +90,14 @@ void SystemManager::Process() {
     }
 }
 
-void SystemManager::SetClientRatio(int i) {
+void SystemManager::SetClientRatio(int i, const std::vector<int> &demand) {
     auto &client = clients_[i];
     double sum = 0;
     std::vector<double> inter_values(client.GetSiteCount());
     for (size_t j = 0; j < client.GetSiteCount(); j++) {
         const auto &site = GetSite(i, j);
         inter_values[j] =
-            (1.0 / site.GetRefTimes() * site.GetRemainBandwidth() / site.GetTotalBandwidth());
+            (1.0 / GetSiteTotalDemand(site, demand) * site.GetRemainBandwidth() / site.GetTotalBandwidth());
         sum += inter_values[j];
     }
     // 当前client的所有可以访问的节点都没有剩余容量了，寄！
@@ -108,6 +105,15 @@ void SystemManager::SetClientRatio(int i) {
     for (size_t j = 0; j < client.GetSiteCount(); j++) {
         client.SetRatio(j, inter_values[j] / sum);
     }
+}
+
+
+ll SystemManager::GetSiteTotalDemand(const Site &site, const std::vector<int> &demand) {
+    ll res = 0;
+    for (int C : site.GetRefClients()) {
+        res += demand[C];
+    }
+    return res;
 }
 
 void SystemManager::Schedule(std::vector<int> &demand) {
@@ -191,7 +197,7 @@ void SystemManager::AverageAllocate(std::vector<int> &demand) {
         while (true) {
             cur_demand = demand[i];
             // 每次循环重设retio避免死循环
-            SetClientRatio(i);
+            SetClientRatio(i, demand);
             int total = 0;
             int tmp;
             size_t j;
