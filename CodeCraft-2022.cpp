@@ -4,7 +4,6 @@
 #include <list>
 #include <memory>
 #include <numeric>
-#include <random>
 
 #include "file_parser.hpp"
 
@@ -42,7 +41,8 @@ class SystemManager {
     std::vector<std::vector<int>> demands_;
     ll total_demand_{0};
     ll avg_demand_;
-    int each_time_full_count_;
+    ll max_demand_{0};
+    int all_full_times_;
 
     // 根据服务器的当前容量，以及被访问次数，动态计算流量分配ratio
     void SetClientRatio(int i, const std::vector<int> &demand);
@@ -58,7 +58,10 @@ class SystemManager {
     void ReadDemands();
     // 向/output/solution.txt中写出结果
     void WriteSchedule();
+    // 计算site当前被引用的需求总和
     ll GetSiteTotalDemand(const Site &site, const std::vector<int> &demand);
+    // 根据函数计算当前应该打满次数
+    int GetFullTimes(const std::vector<int> &demand);
 };
 
 void SystemManager::Init() {
@@ -142,9 +145,19 @@ void SystemManager::Schedule(std::vector<int> &demand) {
     WriteSchedule();
 }
 
+
+int SystemManager::GetFullTimes(const std::vector<int> &demand) {
+    ll cur_demand = std::accumulate(demand.begin(), demand.end(), 0);
+    if (cur_demand <= avg_demand_) {
+        return 0;
+    }
+    double K = 8.0 * all_full_times_ / pow(demands_.size(), 2);
+    return static_cast<int>(K * (cur_demand - avg_demand_) / (max_demand_ - avg_demand_) * 0.5 * demands_.size());
+}
+
 void SystemManager::GreedyAllocate(std::vector<int> &demand) {
-    ll cur_demand_all = std::accumulate(demand.begin(), demand.end(), 0);
-    int cur_full_times = static_cast<int>(cur_demand_all / avg_demand_ * each_time_full_count_) + 1;
+    int cur_full_times = GetFullTimes(demand);
+    printf("cur full times = %d\n", cur_full_times);
     if (cur_full_times == 0) {
         return;
     }
@@ -207,7 +220,7 @@ void SystemManager::AverageAllocate(std::vector<int> &demand) {
                 if (site.GetRemainBandwidth() == 0) {
                     continue;
                 }
-                if (cur_demand < 100 &&
+                if (cur_demand < 30 &&
                     cur_demand <= site.GetRemainBandwidth()) {
                     site.DecreaseBandwith(cur_demand);
                     demand[i] = 0;
@@ -239,19 +252,24 @@ void SystemManager::AverageAllocate(std::vector<int> &demand) {
 void SystemManager::ReadDemands() {
     std::vector<int> demand;
     while (file_parser_.ParseDemand(clients_.size(), demand)) {
-        total_demand_ += std::accumulate(demand.begin(), demand.end(), 0);
+        ll demand_sum = std::accumulate(demand.begin(), demand.end(), 0);
+        total_demand_ += demand_sum;
         demands_.push_back(demand);
+        if (demand_sum > max_demand_) {
+            max_demand_ = demand_sum;
+        }
     }
     avg_demand_ = total_demand_ / demands_.size();
-    int full_times = static_cast<int>(demands_.size() * 0.05);
+    int site_full_times = static_cast<int>(demands_.size() * 0.05);
     for (auto &site : sites_) {
-        site.SetMaxFullTimes(full_times - 1);
+        site.SetMaxFullTimes(site_full_times - 1);
     }
-    each_time_full_count_ = full_times * sites_.size() / demands_.size();
-    printf("max full times = %d\n", full_times);
-    printf("each time full count = %d\n", each_time_full_count_);
+    all_full_times_ = static_cast<int>(demands_.size() * 0.05 * sites_.size());
+    printf("all full times = %d\n", all_full_times_);
+    printf("site max full times = %d\n", site_full_times);
     printf("total demand = %lld\n", total_demand_);
     printf("average demand = %lld\n", avg_demand_);
+    printf("max demand = %lld\n", max_demand_);
 }
 
 void SystemManager::WriteSchedule() {
