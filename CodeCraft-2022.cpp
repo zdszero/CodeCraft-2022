@@ -3,7 +3,6 @@
 #include <cmath>
 #include <iostream>
 #include <list>
-#include <memory>
 #include <numeric>
 
 #include "file_parser.hpp"
@@ -53,6 +52,8 @@ class SystemManager {
     void Schedule(std::vector<int> &demand);
     // 贪心将可以分配满的site先分配满
     void GreedyAllocate(std::vector<int> &demand);
+    // 尽量使得每个site的分配量保持稳定
+    void StableAllocate(std::vector<int> &demand);
     // 平均分配
     void AverageAllocate(std::vector<int> &demand);
     // 获取第i个client的第j个边缘结点
@@ -125,16 +126,23 @@ ll SystemManager::GetSiteTotalDemand(const Site &site, const std::vector<int> &d
 void SystemManager::Schedule(std::vector<int> &demand) {
     // 重设所有server的剩余流量
     for (auto &site : sites_) {
-        site.ResetRemainBandwidth();
+        site.Reset();
     }
     for (auto &client : clients_) {
         client.Reset();
     }
     auto demand_cpy = demand;
+    // greedy allcoation
     GreedyAllocate(demand_cpy);
     for (size_t i = 0; i < clients_.size(); i++) {
         assert(clients_[i].GetTotalAllocation() <= demand[i]);
     }
+    // stable allcoation
+    StableAllocate(demand_cpy);
+    for (size_t i = 0; i < clients_.size(); i++) {
+        assert(clients_[i].GetTotalAllocation() <= demand[i]);
+    }
+    // average allocation
     AverageAllocate(demand_cpy);
     for (int d : demand_cpy) {
         assert(d == 0);
@@ -145,6 +153,10 @@ void SystemManager::Schedule(std::vector<int> &demand) {
         }
         assert(clients_[i].GetTotalAllocation() == demand[i]);
     }
+    // update sites seperate value
+    for (auto &site : sites_) {
+        site.ResetSeperateBandwidth();
+    }
     WriteSchedule();
 }
 
@@ -154,8 +166,6 @@ int SystemManager::GetFullTimes(const std::vector<int> &demand) {
     if (cur_demand <= mid_demand_) {
         return 0;
     }
-    printf("cur_demand - mid_demand_ = %lld, cur_demand / over_demand_all_ = %.2lf\n", cur_demand, 1.0 * (cur_demand - mid_demand_) / over_demand_all_);
-    printf("all full times = %d\n", all_full_times_);
     return static_cast<int>(1.0 * (cur_demand - mid_demand_) / over_demand_all_ * all_full_times_);
 }
 
@@ -192,7 +202,7 @@ void SystemManager::GreedyAllocate(std::vector<int> &demand) {
                 continue;
             }
             int allocated = std::min(site.GetRemainBandwidth(), demand[c]);
-            assert(clients_[c].SetAllocationBySite(max_site_idx, allocated));
+            assert(clients_[c].AddAllocationBySite(max_site_idx, allocated));
             demand[c] -= allocated;
             site.DecreaseBandwith(allocated);
             if (site.GetRemainBandwidth() == 0) {
@@ -200,6 +210,36 @@ void SystemManager::GreedyAllocate(std::vector<int> &demand) {
             }
         }
         site.IncFullTimes();
+        site.SetFullThisTime();
+    }
+}
+
+void SystemManager::StableAllocate(std::vector<int> &demand) {
+    for (size_t C = 0; C < demand.size(); C++) {
+        if (demand[C] == 0) {
+            continue;
+        }
+        for (size_t S = 0; S < clients_[C].GetSiteCount(); S++) {
+            auto &site = GetSite(C, S);
+            if (site.IsFullThisTime()) {
+                continue;
+            }
+            int sep = site.GetSeperateBandwidth();
+            if (sep == 0) {
+                continue;
+            }
+            int allocated = site.GetAllocatedBandwidth();
+            if (allocated >= sep) {
+                continue;
+            }
+            int inc_allocated = std::min(sep - allocated, demand[C]);
+            site.DecreaseBandwith(inc_allocated);
+            demand[C] -= inc_allocated;
+            clients_[C].AddAllocation(S, inc_allocated);
+            if (demand[C] == 0) {
+                break;
+            }
+        }
     }
 }
 

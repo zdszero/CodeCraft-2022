@@ -28,11 +28,11 @@ class Client {
     void AddAllocation(int idx, int value) {
         allocation_table_[idx] += value;
     }
-    bool SetAllocationBySite(int site, int value) {
+    bool AddAllocationBySite(int site, int value) {
         bool flag = false;
         for (size_t i = 0; i < accessible_sites_.size(); i++) {
             if (accessible_sites_[i] == site) {
-                allocation_table_[i] = value;
+                allocation_table_[i] += value;
                 flag = true;
                 break;
             }
