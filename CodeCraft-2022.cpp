@@ -41,9 +41,10 @@ class SystemManager {
     std::vector<Client> clients_;
     std::vector<std::vector<int>> demands_;
     ll total_demand_{0};
-    ll avg_demand_;
+    ll avg_demand_{0};
     ll max_demand_{0};
-    ll mid_demand_;
+    ll mid_demand_{0};
+    ll over_demand_all_{0};
     int all_full_times_;
 
     // 根据服务器的当前容量，以及被访问次数，动态计算流量分配ratio
@@ -153,8 +154,9 @@ int SystemManager::GetFullTimes(const std::vector<int> &demand) {
     if (cur_demand <= mid_demand_) {
         return 0;
     }
-    double K = 8.0 * all_full_times_ / pow(demands_.size(), 2);
-    return static_cast<int>(K * (cur_demand - mid_demand_) / (max_demand_ - mid_demand_) * 0.5 * demands_.size());
+    printf("cur_demand - mid_demand_ = %lld, cur_demand / over_demand_all_ = %.2lf\n", cur_demand, 1.0 * (cur_demand - mid_demand_) / over_demand_all_);
+    printf("all full times = %d\n", all_full_times_);
+    return static_cast<int>(1.0 * (cur_demand - mid_demand_) / over_demand_all_ * all_full_times_);
 }
 
 void SystemManager::GreedyAllocate(std::vector<int> &demand) {
@@ -222,7 +224,7 @@ void SystemManager::AverageAllocate(std::vector<int> &demand) {
                 if (site.GetRemainBandwidth() == 0) {
                     continue;
                 }
-                if (cur_demand < 30 &&
+                if (cur_demand < 50 &&
                     cur_demand <= site.GetRemainBandwidth()) {
                     site.DecreaseBandwith(cur_demand);
                     demand[i] = 0;
@@ -265,6 +267,9 @@ void SystemManager::ReadDemands() {
     }
     std::sort(v.begin(), v.end());
     mid_demand_ = v[v.size() / 2];
+    for (size_t i = v.size() / 2 + 1; i < v.size(); i++) {
+        over_demand_all_ += (v[i] - mid_demand_);
+    }
     avg_demand_ = total_demand_ / demands_.size();
     int site_full_times = static_cast<int>(demands_.size() * 0.05);
     for (auto &site : sites_) {
@@ -277,6 +282,7 @@ void SystemManager::ReadDemands() {
     printf("average demand = %lld\n", avg_demand_);
     printf("mid demand = %lld\n", mid_demand_);
     printf("max demand = %lld\n", max_demand_);
+    printf("over demand all = %lld\n", over_demand_all_);
 }
 
 void SystemManager::WriteSchedule() {
