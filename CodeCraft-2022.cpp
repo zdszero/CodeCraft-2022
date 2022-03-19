@@ -8,6 +8,7 @@
 #include "file_parser.hpp"
 
 #define ll long long
+using single_result_t = std::vector<std::vector<int>>;
 
 template <typename T> void print_vec(std::vector<T> &v) {
     for (T val : v) {
@@ -61,11 +62,13 @@ class SystemManager {
     // 获取所有的请求
     void ReadDemands();
     // 向/output/solution.txt中写出结果
-    void WriteSchedule();
+    void WriteSchedule(single_result_t res);
     // 计算site当前被引用的需求总和
     ll GetSiteTotalDemand(const Site &site, const std::vector<int> &demand);
     // 根据函数计算当前应该打满次数
     int GetFullTimes(const std::vector<int> &demand);
+    // 从clients中提取allocation table
+    single_result_t GenerateResult();
 };
 
 void SystemManager::Init() {
@@ -157,7 +160,7 @@ void SystemManager::Schedule(std::vector<int> &demand) {
     for (auto &site : sites_) {
         site.ResetSeperateBandwidth();
     }
-    WriteSchedule();
+    WriteSchedule(GenerateResult());
 }
 
 
@@ -325,18 +328,26 @@ void SystemManager::ReadDemands() {
     printf("over demand all = %lld\n", over_demand_all_);
 }
 
-void SystemManager::WriteSchedule() {
-    for (size_t i = 0; i < clients_.size(); i++) {
+single_result_t SystemManager::GenerateResult() {
+    single_result_t v;
+    for (const auto &c : clients_) {
+        v.push_back(c.GetAllocationTable());
+    }
+    return v;
+}
+
+void SystemManager::WriteSchedule(single_result_t res) {
+    for (size_t i = 0; i < res.size(); i++) {
         fprintf(output_fp_, "%s:", clients_[i].GetName());
         bool flag = false;
-        for (size_t j = 0; j < clients_[i].GetSiteCount(); j++) {
+        for (size_t j = 0; j < res[i].size(); j++) {
             int site_idx = clients_[i].GetSiteIndex(j);
-            if (clients_[i].GetSiteAllocation(j) > 0) {
+            if (res[i][j] > 0) {
                 if (flag) {
                     fprintf(output_fp_, ",");
                 }
                 fprintf(output_fp_, "<%s,%d>", sites_[site_idx].GetName(),
-                        clients_[i].GetSiteAllocation(j));
+                        res[i][j]);
                 flag = true;
             }
         }

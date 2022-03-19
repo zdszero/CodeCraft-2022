@@ -23,6 +23,7 @@ class Client {
         return accessible_sites_;
     }
     size_t GetSiteCount() const { return accessible_sites_.size(); }
+    const std::vector<int> &GetAllocationTable() const { return allocation_table_; }
     int GetSiteAllocation(int idx) const { return allocation_table_[idx]; }
     int GetTotalAllocation() const { return std::accumulate(allocation_table_.begin(), allocation_table_.end(), 0); }
     void AddAllocation(int idx, int value) {
