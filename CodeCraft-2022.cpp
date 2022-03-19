@@ -17,6 +17,16 @@ template <typename T> void print_vec(std::vector<T> &v) {
     std::cout << std::endl;
 }
 
+struct Demand {
+    size_t idx_;
+    std::vector<int> demand_;
+    ll sum_;
+    Demand() = default;
+    Demand(size_t idx, std::vector<int> &&demand): idx_(idx), demand_(std::move(demand)) {
+        sum_ = std::accumulate(demand_.begin(), demand_.end(), 0LL);
+    }
+};
+
 class SystemManager {
   public:
     SystemManager() = default;
@@ -39,18 +49,19 @@ class SystemManager {
     int qos_constraint_;
     std::vector<Site> sites_;
     std::vector<Client> clients_;
-    std::vector<std::vector<int>> demands_;
+    std::vector<Demand> demands_;
     ll total_demand_{0};
     ll avg_demand_{0};
     ll max_demand_{0};
     ll mid_demand_{0};
     ll over_demand_all_{0};
     int all_full_times_;
+    std::vector<single_result_t> results_;
 
     // 根据服务器的当前容量，以及被访问次数，动态计算流量分配ratio
     void SetClientRatio(int i, const std::vector<int> &demand);
     // 对于每一个时间戳的请求进行调度
-    void Schedule(std::vector<int> &demand);
+    void Schedule(Demand &d);
     // 贪心将可以分配满的site先分配满
     void GreedyAllocate(std::vector<int> &demand);
     // 尽量使得每个site的分配量保持稳定
@@ -89,8 +100,13 @@ void SystemManager::Process() {
     /* while (file_parser_.ParseDemand(clients_.size(), demand)) { */
     /*     Schedule(demand); */
     /* } */
-    for (auto &demand : demands_) {
-        Schedule(demand);
+    /* std::sort(demands_.begin(), demands_.end(), [](const Demand &l, const Demand &r) { return l.sum_ > r.sum_; }); */
+    for (auto &d : demands_) {
+        printf("sum = %lld\n", d.sum_);
+        Schedule(d);
+    }
+    for (const auto &r : results_) {
+        WriteSchedule(r);
     }
     // print full times
     printf("full times: ");
@@ -126,7 +142,7 @@ ll SystemManager::GetSiteTotalDemand(const Site &site, const std::vector<int> &d
     return res;
 }
 
-void SystemManager::Schedule(std::vector<int> &demand) {
+void SystemManager::Schedule(Demand &d) {
     // 重设所有server的剩余流量
     for (auto &site : sites_) {
         site.Reset();
@@ -134,16 +150,16 @@ void SystemManager::Schedule(std::vector<int> &demand) {
     for (auto &client : clients_) {
         client.Reset();
     }
-    auto demand_cpy = demand;
+    auto demand_cpy = d.demand_;
     // greedy allcoation
     GreedyAllocate(demand_cpy);
     for (size_t i = 0; i < clients_.size(); i++) {
-        assert(clients_[i].GetTotalAllocation() <= demand[i]);
+        assert(clients_[i].GetTotalAllocation() <= d.demand_[i]);
     }
     // stable allcoation
     StableAllocate(demand_cpy);
     for (size_t i = 0; i < clients_.size(); i++) {
-        assert(clients_[i].GetTotalAllocation() <= demand[i]);
+        assert(clients_[i].GetTotalAllocation() <= d.demand_[i]);
     }
     // average allocation
     AverageAllocate(demand_cpy);
@@ -151,16 +167,17 @@ void SystemManager::Schedule(std::vector<int> &demand) {
         assert(d == 0);
     }
     for (size_t i = 0; i < clients_.size(); i++) {
-        if (clients_[i].GetTotalAllocation() != demand[i]) {
-            printf("%ldth client, total alocation: %d, demand: %d\n", i, clients_[i].GetTotalAllocation(), demand[i]);
+        if (clients_[i].GetTotalAllocation() != d.demand_[i]) {
+            printf("%ldth client, total alocation: %d, demand: %d\n", i, clients_[i].GetTotalAllocation(), d.demand_[i]);
         }
-        assert(clients_[i].GetTotalAllocation() == demand[i]);
+        assert(clients_[i].GetTotalAllocation() == d.demand_[i]);
     }
     // update sites seperate value
     for (auto &site : sites_) {
         site.ResetSeperateBandwidth();
     }
-    WriteSchedule(GenerateResult());
+    /* WriteSchedule(GenerateResult()); */
+    results_[d.idx_] = GenerateResult();
 }
 
 
@@ -299,21 +316,26 @@ void SystemManager::AverageAllocate(std::vector<int> &demand) {
 void SystemManager::ReadDemands() {
     std::vector<int> demand;
     std::vector<ll> v;
+    size_t cur_idx = 0;
     while (file_parser_.ParseDemand(clients_.size(), demand)) {
-        ll demand_sum = std::accumulate(demand.begin(), demand.end(), 0);
-        v.push_back(demand_sum);
-        total_demand_ += demand_sum;
-        demands_.push_back(demand);
-        if (demand_sum > max_demand_) {
-            max_demand_ = demand_sum;
+        Demand tmpd = Demand(cur_idx++, std::move(demand));
+        v.push_back(tmpd.sum_);
+        total_demand_ += tmpd.sum_;
+        if (tmpd.sum_ > max_demand_) {
+            max_demand_ = tmpd.sum_;
         }
+        demands_.push_back(std::move(tmpd));
     }
+    // 根据demands_设置结果集的大小
+    results_.resize(demands_.size());
+    // 只是统计数据，不在这里对demands_根据sum_排序
     std::sort(v.begin(), v.end());
     mid_demand_ = v[v.size() / 2];
     for (size_t i = v.size() / 2 + 1; i < v.size(); i++) {
         over_demand_all_ += (v[i] - mid_demand_);
     }
     avg_demand_ = total_demand_ / demands_.size();
+    // 设置每个服务器最多打满的次数
     int site_full_times = static_cast<int>(demands_.size() * 0.05);
     for (auto &site : sites_) {
         site.SetMaxFullTimes(site_full_times - 1);
