@@ -63,7 +63,7 @@ class SystemManager {
     // 对于每一个时间戳的请求进行调度
     void Schedule(Demand &d);
     // 贪心将可以分配满的site先分配满
-    void GreedyAllocate(std::vector<int> &demand);
+    void GreedyAllocate(std::vector<int> &demand, int full_count);
     // 尽量使得每个site的分配量保持稳定
     void StableAllocate(std::vector<int> &demand);
     // 平均分配
@@ -151,8 +151,14 @@ void SystemManager::Schedule(Demand &d) {
         client.Reset();
     }
     auto demand_cpy = d.demand_;
+    int full_times = GetFullTimes(demand_cpy);
+    // stable allcoation
+    StableAllocate(demand_cpy);
+    for (size_t i = 0; i < clients_.size(); i++) {
+        assert(clients_[i].GetTotalAllocation() <= d.demand_[i]);
+    }
     // greedy allcoation
-    GreedyAllocate(demand_cpy);
+    GreedyAllocate(demand_cpy, full_times);
     for (size_t i = 0; i < clients_.size(); i++) {
         assert(clients_[i].GetTotalAllocation() <= d.demand_[i]);
     }
@@ -189,13 +195,12 @@ int SystemManager::GetFullTimes(const std::vector<int> &demand) {
     return static_cast<int>(1.0 * (cur_demand - mid_demand_) / over_demand_all_ * all_full_times_);
 }
 
-void SystemManager::GreedyAllocate(std::vector<int> &demand) {
-    int cur_full_times = GetFullTimes(demand);
-    printf("cur full times = %d\n", cur_full_times);
-    if (cur_full_times == 0) {
+void SystemManager::GreedyAllocate(std::vector<int> &demand, int full_count) {
+    printf("cur full times = %d\n", full_count);
+    if (full_count == 0) {
         return;
     }
-    for (int full_times = 0; full_times < cur_full_times; full_times++) {
+    for (int full_times = 0; full_times < full_count; full_times++) {
         int max_site_sum = 0;
         int max_site_idx = -1;
         for (size_t i = 0; i < sites_.size(); i++) {

@@ -47,7 +47,7 @@ class Site {
     }
 
   private:
-    static constexpr double FACTOR = 0.5;
+    static constexpr double FACTOR = 0.8;
     std::string name_;
     int ref_times_{0}; // 可以被多少个client访问
     std::vector<int> ref_clients_;
