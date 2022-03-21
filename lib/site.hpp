@@ -32,6 +32,12 @@ class Site {
         remain_bandwidth = total_bandwidth_;
         full_this_time_ = false;
     }
+    void Restart() {
+      remain_bandwidth = total_bandwidth_;
+      full_this_time_ = false;
+      seperate_ = 0;
+      cur_full_times_ = 0;
+    }
     void SetMaxFullTimes(int times) { max_full_times_ = times; }
     void IncFullTimes() { cur_full_times_++; }
     bool IsSafe() const { return cur_full_times_ < max_full_times_; }

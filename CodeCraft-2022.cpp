@@ -2,8 +2,8 @@
 #include <cassert>
 #include <cmath>
 #include <iostream>
-#include <list>
 #include <numeric>
+#include <random>
 
 #include "file_parser.hpp"
 
@@ -80,6 +80,7 @@ class SystemManager {
     int GetFullTimes(const std::vector<int> &demand);
     // 从clients中提取allocation table
     single_result_t GenerateResult();
+    ll GetGrade();
 };
 
 void SystemManager::Init() {
@@ -101,19 +102,40 @@ void SystemManager::Process() {
     /*     Schedule(demand); */
     /* } */
     /* std::sort(demands_.begin(), demands_.end(), [](const Demand &l, const Demand &r) { return l.sum_ > r.sum_; }); */
-    for (auto &d : demands_) {
-        printf("sum = %lld\n", d.sum_);
-        Schedule(d);
+    ll best_grade = std::numeric_limits<ll>::max();
+    decltype(results_) best_result;
+    for (size_t i = 0; i < 100; i++) {
+        for (auto &site : sites_) {
+            site.Restart();
+        }
+        for (auto &d : demands_) {
+            /* printf("sum = %lld\n", d.sum_); */
+            Schedule(d);
+        }
+        ll grade = GetGrade();
+        printf("grade = %lld\n", grade);
+        if (grade < best_grade) {
+            best_grade = grade;
+            best_result = results_;
+        }
+        std::shuffle(demands_.begin(), demands_.end(), std::default_random_engine{});
     }
-    for (const auto &r : results_) {
+    printf("best grade = %lld\n", best_grade);
+    for (const auto &r : best_result) {
         WriteSchedule(r);
     }
+    /* for (auto &d : demands_) { */
+    /*     Schedule(d); */
+    /* } */
+    /* for (const auto &r : results_) { */
+    /*     WriteSchedule(r); */
+    /* } */
     // print full times
-    printf("full times: ");
-    for (size_t i = 0; i < sites_.size(); i++) {
-        printf("ref count: %d, full times: %d\n", sites_[i].GetRefTimes(),
-               sites_[i].GetFullTimes());
-    }
+    /* printf("full times: "); */
+    /* for (size_t i = 0; i < sites_.size(); i++) { */
+    /*     printf("ref count: %d, full times: %d\n", sites_[i].GetRefTimes(), */
+    /*            sites_[i].GetFullTimes()); */
+    /* } */
 }
 
 void SystemManager::SetClientRatio(int i, const std::vector<int> &demand) {
@@ -196,12 +218,13 @@ int SystemManager::GetFullTimes(const std::vector<int> &demand) {
 }
 
 void SystemManager::GreedyAllocate(std::vector<int> &demand, int full_count) {
-    printf("cur full times = %d\n", full_count);
     if (full_count == 0) {
         return;
     }
+    /* printf("cur full times = %d\n", full_count); */
+    int increased_times = 0;
     for (int full_times = 0; full_times < full_count; full_times++) {
-        int max_site_sum = 0;
+        int max_site_sum = std::numeric_limits<int>::min();
         int max_site_idx = -1;
         for (size_t i = 0; i < sites_.size(); i++) {
             if (!sites_[i].IsSafe()) {
@@ -217,6 +240,7 @@ void SystemManager::GreedyAllocate(std::vector<int> &demand, int full_count) {
             }
         }
         /* printf("choose server %d\n", max_site_idx); */
+        /* printf("choose max site: %d with sum %d\n", max_site_idx, max_site_sum); */
         if (max_site_idx == -1) {
             break;
         }
@@ -236,7 +260,14 @@ void SystemManager::GreedyAllocate(std::vector<int> &demand, int full_count) {
         }
         site.IncFullTimes();
         site.SetFullThisTime();
+        increased_times++;
     }
+    /* printf("increased times = %d\n", increased_times); */
+    /* if (increased_times < full_count) { */
+    /*     for (int d : demand) { */
+    /*         assert(d == 0); */
+    /*     } */
+    /* } */
 }
 
 void SystemManager::StableAllocate(std::vector<int> &demand) {
@@ -361,6 +392,29 @@ single_result_t SystemManager::GenerateResult() {
         v.push_back(c.GetAllocationTable());
     }
     return v;
+}
+
+ll SystemManager::GetGrade() {
+    std::vector<std::vector<int>> a(sites_.size(), std::vector<int>(demands_.size(), 0));
+    // the kth timestamp
+    for (size_t k = 0; k < results_.size(); k++) {
+        const auto &res = results_[k];
+        // for client i
+        for (size_t i = 0; i < res.size(); i++) {
+            // for each server site_idx
+            for (size_t j = 0; j < res[i].size(); j++) {
+                int site_idx = clients_[i].GetSiteIndex(j);
+                a[site_idx][k] += res[i][j];
+            }
+        }
+    }
+    ll grade = 0LL;
+    size_t sep_idx = static_cast<size_t> (0.95 * demands_.size()) - 1;
+    for (auto &v : a) {
+        std::sort(v.begin(), v.end());
+        grade += v[sep_idx];
+    }
+    return grade;
 }
 
 void SystemManager::WriteSchedule(single_result_t res) {
