@@ -55,6 +55,7 @@ class FileParser {
                 fscanf(fp, ",%d", &qos);
                 if (qos < qos_constraint) {
                     clients[j].accessible_sites_.push_back(i);
+
                 }
             }
             fscanf(fp, "\n");

@@ -4,3 +4,6 @@ compile_commands.json
 bin
 .clangd
 .cache
+cmake-build-debug
+src/cmake-build-debug
+.idea

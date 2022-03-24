@@ -8,7 +8,7 @@
 class Client {
     friend class FileParser;
 
-  public:
+public:
     Client() = default;
     Client(const std::string &name) : name_(name) {}
 
@@ -19,7 +19,7 @@ class Client {
         ratios_.resize(size, 0);
     }
     const char *GetName() const { return name_.c_str(); }
-    const std::vector<int>& GetAccessibleSite() const {
+    std::vector<int>& GetAccessibleSite() {
         return accessible_sites_;
     }
     size_t GetSiteCount() const { return accessible_sites_.size(); }
@@ -48,10 +48,13 @@ class Client {
             elem = 0;
         }
     }
+    int GetAccessTotal() {return accessible_total;}
+    void AddAccessTotal(int value) {accessible_total += value;}
 
-  private:
+private:
     std::string name_;
     std::vector<int> accessible_sites_; // 可以访问到的服务器集合
     std::vector<int> allocation_table_; // 在一次请求中分配到每个服务器的流量值
     std::vector<double> ratios_; // 分配流量的衡量变量
+    int accessible_total{0}; //total capacity of accessible site
 };
