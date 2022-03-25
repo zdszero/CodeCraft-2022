@@ -1,11 +1,20 @@
 #pragma once
 
 #include <cstdio>
+#include <iostream>
 #include <string>
 #include <vector>
+#include <unordered_map>
 
 #include "client.hpp"
 #include "site.hpp"
+
+template <typename T> void print_vec(std::vector<T> &v) {
+    for (T val : v) {
+        std::cout << val << " ";
+    }
+    std::cout << std::endl;
+}
 
 class FileParser {
   public:
@@ -23,8 +32,12 @@ class FileParser {
         char buf[30];
         int bandwidth;
         fscanf(fp, "%*[^\n]\n");
+        size_t site_idx = 0;
         while (fscanf(fp, "%[^,],%d\n", buf, &bandwidth) != EOF) {
-            sites.push_back({std::string(buf), bandwidth});
+            std::string site_name(buf);
+            site_name_map_[site_name] = site_idx;
+            sites.push_back({site_name, bandwidth});
+            site_idx++;
         }
         fclose(fp);
     }
@@ -43,19 +56,24 @@ class FileParser {
         char buf[30];
         int qos;
         fscanf(fp, "site_name");
+        size_t cli_idx = 0;
         while (fscanf(fp, ",%[^,\r\n]", buf) == 1) {
-            clients.push_back({std::string(buf)});
+            std::string client_name(buf);
+            client_name_map_[client_name] = cli_idx;
+            clients.push_back({client_name});
+            cli_idx++;
         }
         fscanf(fp, "\n");
         // i表示site的下标
-        for (int i = 0;; i++) {
-            fscanf(fp, "%*[^,]");
+        for (;;) {
+            fscanf(fp, "%[^,]", buf);
+            std::string site_name(buf);
+            size_t cur_site_idx = site_name_map_[site_name];
             // 向每个client中添加满足qos限制的服务器
             for (size_t j = 0; j < clients.size(); j++) {
                 fscanf(fp, ",%d", &qos);
                 if (qos < qos_constraint) {
-                    clients[j].accessible_sites_.push_back(i);
-
+                    clients[j].accessible_sites_.push_back(cur_site_idx);
                 }
             }
             fscanf(fp, "\n");
@@ -76,23 +94,30 @@ class FileParser {
         if (demand_fp_ == nullptr) {
             demand_fp_ = fopen(demand_filename_.c_str(), "r");
         }
-        char timebuf[30];
+        char buf[30];
         demand.resize(client_count, 0);
         if (!flag) {
             flag = true;
             // ignore the first line
-            fscanf(demand_fp_, "%*[^\n]\n");
+            fscanf(demand_fp_, "mtime");
+            demand_cli_idx_.reserve(client_name_map_.size());
+            for (size_t k = 0; k < client_count; k++){
+                fscanf(demand_fp_, ",%[^,\r\n]", buf);
+                std::string cli_name(buf);
+                demand_cli_idx_.push_back(client_name_map_[cli_name]);
+            }
+            fscanf(demand_fp_, "\n");
         }
         int c = fgetc(demand_fp_);
         if (c == EOF) {
             return false;
         }
         ungetc(c, demand_fp_);
-        fscanf(demand_fp_, "%[^,]", timebuf);
+        fscanf(demand_fp_, "%*[^,]");
         for (int i = 0; i < client_count; i++) {
             int tmp;
             fscanf(demand_fp_, ",%d", &tmp);
-            demand[i] = tmp;
+            demand[demand_cli_idx_[i]] = tmp;
         }
         fscanf(demand_fp_, "\n");
         return true;
@@ -112,6 +137,9 @@ class FileParser {
 
   private:
     bool flag{false};
+    std::unordered_map<std::string, size_t> site_name_map_;
+    std::unordered_map<std::string, size_t> client_name_map_;
+    std::vector<size_t> demand_cli_idx_;
     std::string site_filename_{"/data/site_bandwidth.csv"};
     std::string config_filename_{"/data/config.ini"};
     std::string qos_filename_{"/data/qos.csv"};
