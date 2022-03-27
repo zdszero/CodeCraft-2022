@@ -23,7 +23,7 @@ class Site {
         return total_bandwidth_ - remain_bandwidth;
     }
     int GetSeperateBandwidth() const {
-        return static_cast<int>(seperate_ * FACTOR);
+        return static_cast<int>(seperate_ );
     }
     void SetSeperateBandwidth(int sep) { seperate_ = sep; }
     const std::vector<int> &GetRefClients() const { return ref_clients_; }
@@ -40,7 +40,7 @@ class Site {
     void Restart() {
         remain_bandwidth = total_bandwidth_;
         full_this_time_ = false;
-        /* seperate_ = 0; */
+        // seperate_ = 0;
         cur_full_times_ = 0;
     }
     void SetMaxFullTimes(int times) { max_full_times_ = times; }
@@ -59,7 +59,7 @@ class Site {
     }
 
   private:
-    static constexpr double FACTOR = 0.7;
+    static constexpr double FACTOR = 0.8;
     std::string name_;
     int ref_times_{0}; // 可以被多少个client访问
     std::vector<int> ref_clients_;
