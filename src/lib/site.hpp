@@ -3,16 +3,18 @@
 #include <string>
 #include <vector>
 
+using namespace std;
+
 class Site {
     friend class FileParser;
 
   public:
     Site() = default;
-    Site(const std::string &name, int bandwidth)
+    Site(const string &name, int bandwidth)
         : name_(name), total_bandwidth_(bandwidth),
           remain_bandwidth(bandwidth) {}
-    Site(const std::string &name, int bandwidth, std::vector<int> &&ref_clients)
-        : name_(name), ref_clients_(std::move(ref_clients)),
+    Site(const string &name, int bandwidth, vector<int> &&ref_clients)
+        : name_(name), ref_clients_(move(ref_clients)),
           total_bandwidth_(bandwidth), remain_bandwidth(bandwidth) {}
     const char *GetName() const { return name_.c_str(); }
     int GetRefTimes() const { return ref_times_; }
@@ -26,7 +28,7 @@ class Site {
         return static_cast<int>(seperate_ );
     }
     void SetSeperateBandwidth(int sep) { seperate_ = sep; }
-    const std::vector<int> &GetRefClients() const { return ref_clients_; }
+    const vector<int> &GetRefClients() const { return ref_clients_; }
 
     void AddRefClient(int client_id) {
         ref_clients_.push_back(client_id);
@@ -60,9 +62,9 @@ class Site {
 
   private:
     static constexpr double FACTOR = 0.8;
-    std::string name_;
+    string name_;
     int ref_times_{0}; // 可以被多少个client访问
-    std::vector<int> ref_clients_;
+    vector<int> ref_clients_;
     int total_bandwidth_{0};
     int remain_bandwidth{0};
     int max_full_times_{0};

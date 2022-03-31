@@ -1,60 +1,60 @@
 #pragma once
 
+#include <cstdio>
+#include <list>
+#include <numeric>
 #include <string>
 #include <vector>
-#include <cstdio>
-#include <numeric>
+
+using namespace std;
 
 class Client {
     friend class FileParser;
 
   public:
     Client() = default;
-    Client(const std::string &name) : name_(name) {}
+    Client(const string &name) : name_(name) {}
 
     // 初始化其他内部模块
     void Init() {
         size_t size = accessible_sites_.size();
-        allocation_table_.resize(size, 0);
-        ratios_.resize(size, 0);
+        allocation_table_.resize(size, list<string>{});
     }
+    void Reset() {
+        for (auto &elem : allocation_table_) {
+            elem = list<string>{};
+        }
+    }
+
     const char *GetName() const { return name_.c_str(); }
-    std::vector<int>& GetAccessibleSite() {
-        return accessible_sites_;
-    }
+
     size_t GetSiteCount() const { return accessible_sites_.size(); }
-    const std::vector<int> &GetAllocationTable() const { return allocation_table_; }
-    int GetSiteAllocation(int idx) const { return allocation_table_[idx]; }
-    int GetTotalAllocation() const { return std::accumulate(allocation_table_.begin(), allocation_table_.end(), 0); }
-    void AddAllocation(int idx, int value) {
-        allocation_table_[idx] += value;
+    int GetSiteIndex(int idx) const { return accessible_sites_[idx]; }
+    vector<size_t> &GetAccessibleSite() { return accessible_sites_; }
+
+    const vector<list<string>> &GetAllocationTable() const {
+        return allocation_table_;
     }
-    bool AddAllocationBySite(int site, int value) {
-        bool flag = false;
-        for (size_t i = 0; i < accessible_sites_.size(); i++) {
-            if (accessible_sites_[i] == site) {
-                allocation_table_[i] += value;
-                flag = true;
+
+    int GetAccessTotal() { return accessible_total; }
+    void AddAccessTotal(int value) { accessible_total += value; }
+
+    void AddAllocation(size_t idx, string stream_name) {
+        allocation_table_[idx].push_back(stream_name);
+    }
+    void AddAllocationBySiteIndex(size_t site_idx, string stream_name) {
+        for (size_t i = 0; i < allocation_table_.size(); i++) {
+            if (accessible_sites_[i] == site_idx) {
+                AddAllocation(i, stream_name);
                 break;
             }
         }
-        return flag;
     }
-    int GetSiteIndex(int idx) const { return accessible_sites_[idx]; }
-    double GetRatio(int idx) const { return ratios_[idx]; }
-    void SetRatio(int idx, double ratio) { ratios_[idx] = ratio; }
-    void Reset() {
-        for (auto &elem : allocation_table_) {
-            elem = 0;
-        }
-    }
-    int GetAccessTotal() {return accessible_total;}
-    void AddAccessTotal(int value) {accessible_total += value;}
 
   private:
-    std::string name_;
-    std::vector<int> accessible_sites_; // 可以访问到的服务器集合
-    std::vector<int> allocation_table_; // 在一次请求中分配到每个服务器的流量值
-    std::vector<double> ratios_; // 分配流量的衡量变量
+    string name_;
+    vector<size_t> accessible_sites_; // 可以访问到的服务器集合的index
+    vector<list<string>>
+        allocation_table_; // 在一次请求中分配到每个服务器的流量值
     int accessible_total{0};
 };
