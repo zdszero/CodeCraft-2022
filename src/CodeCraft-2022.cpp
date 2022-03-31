@@ -248,7 +248,7 @@ void SystemManager::Process() {
             double sep_count = 0;
             int idxx = 0;
             for(int jkl = sep_idx; jkl >= 0; jkl--) {
-                if(a[iiii][jkl] > a[iiii][sep_idx] * 0.85) {
+                if(a[iiii][jkl] > a[iiii][sep_idx] * 0.8) {
                     sep_count += a[iiii][jkl];
                     idxx = jkl;
                 } else {
@@ -278,10 +278,10 @@ void SystemManager::Process() {
             for(int site_idx : sort_sep_site_idx){
             //for(int site_idx = 0; site_idx < sites_.size(); site_idx++) {
                 auto & site = sites_[site_idx];
-                if(a[site_idx][time] <= site.GetSeperateBandwidth() * 0.85 || a[site_idx][time] > site.GetSeperateBandwidth()) {
+                if(a[site_idx][time] <= site.GetSeperateBandwidth() * 0.8 || a[site_idx][time] > site.GetSeperateBandwidth()) {
                     continue;
                 }
-                int need_migrate = a[site_idx][time] - site.GetSeperateBandwidth() * 0.85;
+                int need_migrate = a[site_idx][time] - site.GetSeperateBandwidth() * 0.8;
                 int can_migrate = 0;
 
                 for(int cli_idx :site.GetRefClients()) {
@@ -303,7 +303,7 @@ void SystemManager::Process() {
                         int cli_site_idx = client.GetAccessibleSite()[id];
 
                         auto &cli_site = sites_[cli_site_idx];
-                        int sep = cli_site.GetSeperateBandwidth() * 0.85;
+                        int sep = cli_site.GetSeperateBandwidth() * 0.8;
                         int cap = cli_site.GetTotalBandwidth();
                         int allocated = a[cli_site_idx][time];   //results_[time][cli_idx][id];
                         if (allocated >= sep) {
@@ -397,7 +397,7 @@ void SystemManager::Process() {
             double sep_count = 0;
             int idxx = 0;
             for(int jkl = sep_idx; jkl >= 0; jkl--) {
-                if(a[iiii][jkl] > a[iiii][sep_idx] * 0.85) {
+                if(a[iiii][jkl] > a[iiii][sep_idx] * 0.8) {
                     sep_count += a[iiii][jkl];
                     idxx = jkl;
                 } else {
@@ -427,10 +427,10 @@ void SystemManager::Process() {
 
             for(int site_idx = 0; site_idx < sites_.size(); site_idx++) {
                 auto & site = sites_[site_idx];
-                if(a[site_idx][time] <= site.GetSeperateBandwidth() * 0.85 || a[site_idx][time] > site.GetSeperateBandwidth()) {
+                if(a[site_idx][time] <= site.GetSeperateBandwidth() * 0.8 || a[site_idx][time] > site.GetSeperateBandwidth()) {
                     continue;
                 }
-                int need_migrate = a[site_idx][time] - site.GetSeperateBandwidth() * 0.85;
+                int need_migrate = a[site_idx][time] - site.GetSeperateBandwidth() * 0.8;
                 int can_migrate = 0;
 
                 for(int cli_idx :site.GetRefClients()) {
@@ -452,7 +452,7 @@ void SystemManager::Process() {
                         int cli_site_idx = client.GetAccessibleSite()[id];
 
                         auto &cli_site = sites_[cli_site_idx];
-                        int sep = cli_site.GetSeperateBandwidth() * 0.85;
+                        int sep = cli_site.GetSeperateBandwidth() * 0.8;
                         int cap = cli_site.GetTotalBandwidth();
                         int allocated = a[cli_site_idx][time];   //results_[time][cli_idx][id];
                         if (allocated >= sep) {
