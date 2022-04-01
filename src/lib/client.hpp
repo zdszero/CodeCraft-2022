@@ -21,8 +21,8 @@ class Client {
         allocation_table_.resize(size, list<string>{});
     }
     void Reset() {
-        for (auto &elem : allocation_table_) {
-            elem = list<string>{};
+        for (auto &l : allocation_table_) {
+            l.clear();
         }
     }
 
