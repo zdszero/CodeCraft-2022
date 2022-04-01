@@ -9,10 +9,10 @@
 
 #include "daily_site.hpp"
 #include "file_parser.hpp"
+#include "result_set.hpp"
 
 using namespace std;
 
-using allocation_t = vector<vector<list<string>>>;
 using all_demand_t = vector<Demand>;
 
 bool is_valid = true;
@@ -48,7 +48,7 @@ class SystemManager {
     long mid_demand_{0};
     long over_demand_all_{0};
     int all_full_times_;
-    vector<allocation_t> results_;
+    ResultSet results_;
     vector<vector<int>> daily_full_site_idx;
     vector<vector<int>> best_daily_full_site_idx;
 
@@ -65,11 +65,9 @@ class SystemManager {
     // 获取第i个client的第j个边缘结点
     Site &GetSite(int i, int j) { return sites_[clients_[i].GetSiteIndex(j)]; }
     // 向/output/solution.txt中写出结果
-    void WriteSchedule(const allocation_t &res);
+    void WriteSchedule(const Result &res);
     // 根据函数计算当前应该打满次数
     int GetFullTimes(const Demand &d);
-    // 从clients中提取allocation table
-    allocation_t GenerateResult();
     // 获取成绩
     long GetGrade();
     // 预先设定好每天需要打满的服务器
@@ -82,7 +80,7 @@ void SystemManager::Init() {
     file_parser_.ParseQOS(clients_, qos_constraint_);
     while (file_parser_.ParseDemand(clients_.size(), demands_))
         ;
-    results_.resize(demands_.size());
+    results_.Reserve(demands_.size());
     // 计算每个site被多少client使用
     for (size_t i = 0; i < clients_.size(); i++) {
         for (const auto site_idx : clients_[i].GetAccessibleSite()) {
@@ -115,10 +113,10 @@ void SystemManager::Init() {
         site.SetMaxFullTimes(demands_.size() / 20 - 1);
     }
 
-    for (int i = 0; i < demands_.size(); i++) {
+    for (size_t i = 0; i < demands_.size(); i++) {
         auto d = demands_[i];
         demandsByClient.push_back(vector<int>(clients_.size(), 0));
-        for (int j = 0; j < clients_.size(); j++) {
+        for (size_t j = 0; j < clients_.size(); j++) {
             demandsByClient[i][j] = d.GetClientDemand(j);
         }
     }
@@ -132,14 +130,14 @@ struct DailySiteCmp {
 
 void SystemManager::PresetMaxSites() {
     std::vector<int> max_site_idx;
-    for (int i = 0; i < sites_.size(); i++) {
+    for (size_t i = 0; i < sites_.size(); i++) {
         max_site_idx.push_back(i);
         sites_[i].SetSeperateBandwidth(sites_[i].GetTotalBandwidth() * 0.07);
     }
     // Sort by site capacity
     auto sites_copy = sites_;
-    for (int ii = 0; ii < sites_.size(); ii++) {
-        for (int jj = sites_.size() - 1; jj > 0; jj--) {
+    for (size_t ii = 0; ii < sites_.size(); ii++) {
+        for (size_t jj = sites_.size() - 1; jj > 0; jj--) {
             if (sites_copy[jj].GetTotalBandwidth() >
                 sites_copy[jj - 1].GetTotalBandwidth()) {
                 std::swap(sites_copy[jj], sites_copy[jj - 1]);
@@ -151,13 +149,13 @@ void SystemManager::PresetMaxSites() {
     // 按照site容量降序计算在哪一天打满
     auto demands_copy = demandsByClient;
     daily_full_site_idx.clear();
-    for (int demands_idx = 0; demands_idx < demands_.size(); demands_idx++) {
+    for (size_t demands_idx = 0; demands_idx < demands_.size(); demands_idx++) {
         daily_full_site_idx.push_back(std::vector<int>());
     }
     for (int site_index : max_site_idx) {
         std::priority_queue<Daily_site, std::vector<Daily_site>, DailySiteCmp>
             site_max_req;
-        for (int demands_idx = 0; demands_idx < demands_copy.size();
+        for (size_t demands_idx = 0; demands_idx < demands_copy.size();
              demands_idx++) {
             auto &demand = demands_copy[demands_idx];
             int cur_sum = 0;
@@ -168,7 +166,7 @@ void SystemManager::PresetMaxSites() {
             }
             if (cur_sum > 0) {
                 site_max_req.push(
-                    {demands_idx, site_index,
+                    {static_cast<int>(demands_idx), site_index,
                      cur_sum - sites_[site_index].GetSeperateBandwidth(),
                      sites_[site_index].GetTotalBandwidth()});
             }
@@ -202,7 +200,7 @@ void SystemManager::PresetMaxSites() {
 
 void SystemManager::Process() {
     PresetMaxSites();
-    for (int day_idx = 0; day_idx < demands_.size(); day_idx++) {
+    for (size_t day_idx = 0; day_idx < demands_.size(); day_idx++) {
         auto &d = demands_[day_idx];
         Schedule(d, day_idx);
     }
@@ -227,7 +225,7 @@ void SystemManager::Schedule(Demand &d, int day) {
     for (auto &site : sites_) {
         site.ResetSeperateBandwidth();
     }
-    results_[day] = GenerateResult();
+    results_.AddResult(Result(clients_, sites_));
 }
 
 void SystemManager::GreedyAllocate(Demand &d, int day) {
@@ -249,8 +247,8 @@ void SystemManager::GreedyAllocate(Demand &d, int day) {
                     continue;
                 }
                 site.DecreaseBandwith(it->second[C]);
+                clients_[C].AddAllocationBySiteIndex(max_site_idx, {it->first, it->second[C]});
                 it->second[C] = 0;
-                clients_[C].AddAllocationBySiteIndex(max_site_idx, it->first);
             }
         }
         site.IncFullTimes();
@@ -285,7 +283,7 @@ void SystemManager::BaseAllocate(Demand &d) {
                 }
                 if (site.GetRemainBandwidth() >= v[C]) {
                     site.DecreaseBandwith(v[C]);
-                    cli.AddAllocation(S, stream_name);
+                    cli.AddAllocation(S, {stream_name, v[C]});
                     v[C] = 0;
                     break;
                 }
@@ -340,38 +338,29 @@ void SystemManager::AverageAllocate(Demand &d) {
             auto &site = sites_[min_site];
             site.DecreaseBandwith(v[C]);
             site.ResetSeperateBandwidth();
-            cli.AddAllocation(min_S, stream_name);
+            cli.AddAllocation(min_S, {stream_name, v[C]});
             v[C] = 0;
             assert(flag == true);
         }
     }
 }
 
-allocation_t SystemManager::GenerateResult() {
-    allocation_t v;
-    v.reserve(clients_.size());
-    for (const auto &c : clients_) {
-        v.push_back(c.GetAllocationTable());
-    }
-    return v;
-}
-
-void SystemManager::WriteSchedule(const allocation_t &res) {
+void SystemManager::WriteSchedule(const Result &res) {
     // for each client index i
-    for (size_t i = 0; i < res.size(); i++) {
-        fprintf(output_fp_, "%s:", clients_[i].GetName());
+    for (size_t C = 0; C < clients_.size(); C++) {
+        fprintf(output_fp_, "%s:", clients_[C].GetName());
         bool flag = false;
         // for each accessible server j
-        for (size_t j = 0; j < res[i].size(); j++) {
-            const auto &allocate_list = res[i][j];
-            int site_idx = clients_[i].GetSiteIndex(j);
+        for (size_t S = 0; S < res.GetClientAccessibleSiteCount(C); S++) {
+            const auto &allocate_list = res.GetAllocationTable(C, S);
+            int site_idx = clients_[C].GetSiteIndex(S);
             if (!allocate_list.empty()) {
                 if (flag) {
                     fprintf(output_fp_, ",");
                 }
                 fprintf(output_fp_, "<%s", sites_[site_idx].GetName());
-                for (string s : allocate_list) {
-                    fprintf(output_fp_, ",%s", s.c_str());
+                for (auto &p : allocate_list) {
+                    fprintf(output_fp_, ",%s", p.first.c_str());
                 }
                 fprintf(output_fp_, ">");
                 flag = true;
