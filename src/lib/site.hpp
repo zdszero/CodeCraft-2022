@@ -2,6 +2,7 @@
 
 #include <string>
 #include <vector>
+#include <cassert>
 
 using namespace std;
 
@@ -34,7 +35,10 @@ class Site {
         ref_clients_.push_back(client_id);
         ref_times_++;
     }
-    void DecreaseBandwith(int usage) { remain_bandwidth -= usage; }
+    void DecreaseBandwith(int usage) {
+        remain_bandwidth -= usage;
+        assert(remain_bandwidth >= 0);
+    }
     void Reset() {
         remain_bandwidth = total_bandwidth_;
         full_this_time_ = false;

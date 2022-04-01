@@ -1,6 +1,6 @@
 #pragma once
 
-#include <cstdio>
+#include <cassert>
 #include <list>
 #include <numeric>
 #include <string>
@@ -43,12 +43,15 @@ class Client {
         allocation_table_[idx].push_back(stream_name);
     }
     void AddAllocationBySiteIndex(size_t site_idx, string stream_name) {
+        bool flag = false;
         for (size_t i = 0; i < allocation_table_.size(); i++) {
             if (accessible_sites_[i] == site_idx) {
                 AddAllocation(i, stream_name);
+                flag = true;
                 break;
             }
         }
+        assert(flag == true);
     }
 
   private:
