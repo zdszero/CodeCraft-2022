@@ -6,6 +6,7 @@
 #include <numeric>
 #include <queue>
 #include <random>
+#include <memory>
 
 #include "daily_site.hpp"
 #include "file_parser.hpp"
@@ -48,7 +49,7 @@ class SystemManager {
     long mid_demand_{0};
     long over_demand_all_{0};
     int all_full_times_;
-    ResultSet results_;
+    unique_ptr<ResultSet> results_;
     vector<vector<int>> daily_full_site_idx;
     vector<vector<int>> best_daily_full_site_idx;
 
@@ -80,7 +81,8 @@ void SystemManager::Init() {
     file_parser_.ParseQOS(clients_, qos_constraint_);
     while (file_parser_.ParseDemand(clients_.size(), demands_))
         ;
-    results_.Reserve(demands_.size());
+    results_ = unique_ptr<ResultSet>(new ResultSet(sites_, base_cost_));
+    results_->Reserve(demands_.size());
     // 计算每个site被多少client使用
     for (size_t i = 0; i < clients_.size(); i++) {
         for (const auto site_idx : clients_[i].GetAccessibleSite()) {
@@ -204,9 +206,12 @@ void SystemManager::Process() {
         auto &d = demands_[day_idx];
         Schedule(d, day_idx);
     }
-    for (const auto &day_res : results_) {
+    for (const auto &day_res : *results_) {
         WriteSchedule(day_res);
     }
+
+    results_->ComputeAllSeps();
+    printf("grade = %d\n", results_->GetGrade());
 }
 
 void SystemManager::Schedule(Demand &d, int day) {
@@ -225,7 +230,7 @@ void SystemManager::Schedule(Demand &d, int day) {
     for (auto &site : sites_) {
         site.ResetSeperateBandwidth();
     }
-    results_.AddResult(Result(clients_, sites_));
+    results_->AddResult(Result(clients_, sites_));
 }
 
 void SystemManager::GreedyAllocate(Demand &d, int day) {
