@@ -11,7 +11,7 @@
 
 using namespace std;
 
-static constexpr double MIGRATE_FACTOR = 0.8;
+static constexpr double MIGRATE_FACTOR = 0.7;
 inline int FactorSep(int sep) { return static_cast<int>(MIGRATE_FACTOR * sep); }
 
 // 一天中所有客户的分配情况
@@ -43,19 +43,22 @@ class Result {
                  std::vector<std::vector<size_t>> &cli_refs) {
         bool ret = false;
         int cur_sep = seps[From].first;
-        for (auto it = site_streams_[From].begin(); it != site_streams_[From].end();) {
+        for (auto it = site_streams_[From].begin();
+             it != site_streams_[From].end();) {
+            assert(it->site_idx == From);
             // which client is the stream from
             auto &cli_tbl = cli_tbls_[it->cli_idx];
             auto &cli_ref = cli_refs[it->cli_idx];
-            size_t To = -1;
+            int To = -1;
             // choose To server to move
             for (size_t candidate : cli_ref) {
                 if (candidate == From) {
                     continue;
                 }
                 // if server[To] used size is less than factor * cap
-                if (site_loads_[candidate] + it->stream_size < FactorSep(seps[candidate].first)) {
-                    To = candidate;
+                if (site_loads_[candidate] + it->stream_size <
+                    FactorSep(seps[candidate].first)) {
+                    To = static_cast<int>(candidate);
                     break;
                 }
             }
@@ -66,6 +69,8 @@ class Result {
             }
             cur_sep -= it->stream_size;
             cli_tbl.MoveStream(*it, From, To);
+            site_loads_[To] += it->stream_size;
+            site_loads_[From] -= it->stream_size;
             site_streams_[To].push_back(*it);
             it = site_streams_[From].erase(it);
             if (cur_sep < FactorSep(seps[From].first)) {
@@ -122,7 +127,7 @@ class ResultSet {
     void ComputeAllSeps(bool set_migrate = false);
 };
 
-int ResultSet::GetGrade() {
+inline int ResultSet::GetGrade() {
     ComputeAllSeps(false);
     int grade = 0;
     printf("all 95 seperators:\n");
@@ -145,25 +150,30 @@ int ResultSet::GetGrade() {
     return grade;
 }
 
-void ResultSet::Migrate() {
+inline void ResultSet::Migrate() {
     ComputeAllSeps(true);
-    for (size_t S = 0; S < site_migrate_days_.size(); S++) {
-        auto &mig_streams = site_migrate_days_[S];
-        for (auto it = mig_streams.begin(); it != mig_streams.end();) {
+    for (size_t site_idx = 0; site_idx < site_migrate_days_.size();
+         site_idx++) {
+        auto &site_mig_day = site_migrate_days_[site_idx];
+        for (auto it = site_mig_day.begin(); it != site_mig_day.end();) {
             size_t day = it->second;
-            // 将第day天的S号服务器的请求分配到其他服务器
-            bool ret = days_result_[day].Migrate(S, seps_, cli_ref_sites_idx_);
+            // 将第day天的site_idx号服务器的请求分配到其他服务器
+            bool ret =
+                days_result_[day].Migrate(site_idx, seps_, cli_ref_sites_idx_);
             if (ret == false) {
                 break;
             }
-            it = mig_streams.erase(it);
+            it = site_mig_day.erase(it);
+            if (site_mig_day.empty()) {
+                break;
+            }
             // 更新sep值，避免其他服务器又打到已经migrate过的服务器
-            seps_[S] = mig_streams.front();
+            seps_[site_idx] = site_mig_day.front();
         }
     }
 }
 
-void ResultSet::ComputeAllSeps(bool set_migrate) {
+inline void ResultSet::ComputeAllSeps(bool set_migrate) {
     assert(not days_result_.empty());
     size_t site_count = days_result_[0].site_loads_.size();
     seps_.resize(site_count, {0, 0});

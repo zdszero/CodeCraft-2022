@@ -3,10 +3,10 @@
 #include <chrono>
 #include <cmath>
 #include <iostream>
+#include <memory>
 #include <numeric>
 #include <queue>
 #include <random>
-#include <memory>
 
 #include "daily_site.hpp"
 #include "file_parser.hpp"
@@ -81,7 +81,8 @@ void SystemManager::Init() {
     file_parser_.ParseQOS(clients_, qos_constraint_);
     while (file_parser_.ParseDemand(clients_.size(), demands_))
         ;
-    results_ = unique_ptr<ResultSet>(new ResultSet(sites_, clients_, base_cost_));
+    results_ =
+        unique_ptr<ResultSet>(new ResultSet(sites_, clients_, base_cost_));
     results_->Reserve(demands_.size());
     // 计算每个site被多少client使用
     for (size_t i = 0; i < clients_.size(); i++) {
@@ -93,13 +94,17 @@ void SystemManager::Init() {
     std::for_each(clients_.begin(), clients_.end(), [this](Client &cli) {
         sort(cli.GetAccessibleSite().begin(), cli.GetAccessibleSite().end(),
              [this](int l, int r) {
-                 return sites_[l].GetRefTimes() > sites_[r].GetRefTimes();
+                 return sites_[l].GetRefTimes() < sites_[r].GetRefTimes();
              });
 
         for (auto site : cli.GetAccessibleSite()) {
             cli.AddAccessTotal(sites_[site].GetTotalBandwidth());
         }
     });
+    for (size_t cli_idx = 0; cli_idx < clients_.size(); cli_idx++) {
+        clients_[cli_idx].SetID(cli_idx);
+        clients_[cli_idx].ReInit();
+    }
     // set variables
     for (const auto &d : demands_) {
         long cur_total = d.GetTotalDemand();
@@ -206,11 +211,11 @@ void SystemManager::Process() {
         auto &d = demands_[day_idx];
         Schedule(d, day_idx);
     }
+    results_->Migrate();
+    printf("grade = %d\n", results_->GetGrade());
     for (const auto &day_res : *results_) {
         WriteSchedule(day_res);
     }
-    results_->Migrate();
-    printf("grade = %d\n", results_->GetGrade());
 }
 
 void SystemManager::Schedule(Demand &d, int day) {
@@ -242,18 +247,23 @@ void SystemManager::GreedyAllocate(Demand &d, int day) {
             return;
         }
         auto &site = sites_[max_site_idx];
-        for (size_t C : site.GetRefClients()) {
+        for (size_t cli_idx : site.GetRefClients()) {
             for (auto it = need.begin(); it != need.end(); it++) {
-                if (it->second[C] > site.GetRemainBandwidth()) {
+                if (it->second[cli_idx] > site.GetRemainBandwidth()) {
                     continue;
                 }
-                if (it->second[C] == 0) {
+                if (it->second[cli_idx] == 0) {
                     continue;
                 }
                 /* site.DecreaseBandwidth(it->second[C]); */
-                site.AddStream(Stream{C, it->first, it->second[C]});
-                clients_[C].AddAllocationBySiteIndex(max_site_idx, Stream{C, it->first, it->second[C]});
-                it->second[C] = 0;
+                site.AddStream(Stream{cli_idx,
+                                      static_cast<size_t>(max_site_idx),
+                                      it->first, it->second[cli_idx]});
+                clients_[cli_idx].AddStreamBySiteIndex(
+                    max_site_idx,
+                    Stream{cli_idx, static_cast<size_t>(max_site_idx),
+                           it->first, it->second[cli_idx]});
+                it->second[cli_idx] = 0;
             }
         }
         site.IncFullTimes();
@@ -267,13 +277,13 @@ void SystemManager::BaseAllocate(Demand &d) {
         string stream_name = it->first;
         auto &v = it->second;
         // client idx i
-        for (size_t C = 0; C < v.size(); C++) {
-            if (v[C] == 0) {
+        for (size_t cli_idx = 0; cli_idx < v.size(); cli_idx++) {
+            if (v[cli_idx] == 0) {
                 continue;
             }
             int sep = 0;
             int allocated = 0;
-            auto &cli = clients_[C];
+            auto &cli = clients_[cli_idx];
             auto &site_indexes = cli.GetAccessibleSite();
             for (size_t S = 0; S < site_indexes.size(); S++) {
                 size_t site_idx = site_indexes[S];
@@ -283,14 +293,16 @@ void SystemManager::BaseAllocate(Demand &d) {
                 }
                 sep = site.GetSeperateBandwidth();
                 allocated = site.GetAllocatedBandwidth();
-                if (allocated >= sep - v[C]) {
+                if (allocated >= sep - v[cli_idx]) {
                     continue;
                 }
-                if (site.GetRemainBandwidth() >= v[C]) {
+                if (site.GetRemainBandwidth() >= v[cli_idx]) {
                     /* site.DecreaseBandwidth(v[C]); */
-                    site.AddStream(Stream{C, stream_name, v[C]});
-                    cli.AddAllocation(S, Stream{C, stream_name, v[C]});
-                    v[C] = 0;
+                    site.AddStream(
+                        Stream{cli_idx, site_idx, stream_name, v[cli_idx]});
+                    cli.AddStream(
+                        S, Stream{cli_idx, site_idx, stream_name, v[cli_idx]});
+                    v[cli_idx] = 0;
                     break;
                 }
             }
@@ -305,11 +317,11 @@ void SystemManager::AverageAllocate(Demand &d) {
         string stream_name = it->first;
         auto &v = it->second;
         // client idx i
-        for (size_t C = 0; C < v.size(); C++) {
-            if (v[C] == 0) {
+        for (size_t cli_idx = 0; cli_idx < v.size(); cli_idx++) {
+            if (v[cli_idx] == 0) {
                 continue;
             }
-            auto &cli = clients_[C];
+            auto &cli = clients_[cli_idx];
             auto &site_indexes = cli.GetAccessibleSite();
             bool flag = false;
             int min_site = -1;
@@ -321,8 +333,8 @@ void SystemManager::AverageAllocate(Demand &d) {
             for (size_t S = 0; S < site_indexes.size(); S++) {
                 size_t site_idx = site_indexes[S];
                 auto &site = sites_[site_idx];
-                if (site.GetRemainBandwidth() >= v[C]) {
-                    used = site.GetAllocatedBandwidth() + v[C];
+                if (site.GetRemainBandwidth() >= v[cli_idx]) {
+                    used = site.GetAllocatedBandwidth() + v[cli_idx];
                     sep = site.GetSeperateBandwidth();
                     if (used <= sep) {
                         min_site = site_idx;
@@ -343,10 +355,13 @@ void SystemManager::AverageAllocate(Demand &d) {
             }
             auto &site = sites_[min_site];
             /* site.DecreaseBandwidth(v[C]); */
-            site.AddStream(Stream{C, stream_name, v[C]});
+            site.AddStream(Stream{cli_idx, static_cast<size_t>(min_site),
+                                  stream_name, v[cli_idx]});
             site.ResetSeperateBandwidth();
-            cli.AddAllocation(min_S, Stream{C, stream_name, v[C]});
-            v[C] = 0;
+            cli.AddStream(min_S,
+                              Stream{cli_idx, static_cast<size_t>(min_site),
+                                     stream_name, v[cli_idx]});
+            v[cli_idx] = 0;
             assert(flag == true);
         }
     }
@@ -354,13 +369,13 @@ void SystemManager::AverageAllocate(Demand &d) {
 
 void SystemManager::WriteSchedule(const Result &res) {
     // for each client index i
-    for (size_t C = 0; C < clients_.size(); C++) {
-        fprintf(output_fp_, "%s:", clients_[C].GetName());
+    for (size_t cli_idx = 0; cli_idx < clients_.size(); cli_idx++) {
+        fprintf(output_fp_, "%s:", clients_[cli_idx].GetName());
         bool flag = false;
         // for each accessible server j
-        for (size_t S = 0; S < res.GetClientAccessibleSiteCount(C); S++) {
-            const auto &allocate_list = res.GetAllocationTable(C, S);
-            int site_idx = clients_[C].GetSiteIndex(S);
+        for (size_t S = 0; S < res.GetClientAccessibleSiteCount(cli_idx); S++) {
+            const auto &allocate_list = res.GetAllocationTable(cli_idx, S);
+            int site_idx = clients_[cli_idx].GetSiteIndex(S);
             if (!allocate_list.empty()) {
                 if (flag) {
                     fprintf(output_fp_, ",");

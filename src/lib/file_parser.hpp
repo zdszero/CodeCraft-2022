@@ -3,12 +3,12 @@
 #include <cstdio>
 #include <iostream>
 #include <string>
-#include <vector>
 #include <unordered_map>
+#include <vector>
 
 #include "client.hpp"
-#include "site.hpp"
 #include "demand.hpp"
+#include "site.hpp"
 
 using namespace std;
 
@@ -32,7 +32,7 @@ class FileParser {
         while (fscanf(fp, "%[^,],%d\n", buf, &bandwidth) != EOF) {
             string site_name(buf);
             site_name_map_[site_name] = site_idx;
-            sites.push_back({site_name, bandwidth});
+            sites.push_back({site_idx, site_name, bandwidth});
             site_idx++;
         }
         fclose(fp);
@@ -57,7 +57,7 @@ class FileParser {
         while (fscanf(fp, ",%[^,\r\n]", buf) == 1) {
             string client_name(buf);
             client_name_map_[client_name] = cli_idx;
-            clients.push_back({client_name});
+            clients.push_back({cli_idx, client_name});
             cli_idx++;
         }
         fscanf(fp, "\n");
@@ -100,7 +100,7 @@ class FileParser {
             // ignore the first line
             fscanf(demand_fp_, "mtime,stream_id");
             demand_cli_idx_.reserve(client_name_map_.size());
-            for (int k = 0; k < client_count; k++){
+            for (int k = 0; k < client_count; k++) {
                 fscanf(demand_fp_, ",%[^,\r\n]", buf);
                 string cli_name(buf);
                 demand_cli_idx_.push_back(client_name_map_[cli_name]);
@@ -135,7 +135,7 @@ class FileParser {
         demands.push_back(d);
         return ret;
     }
-    
+
     int GetDemandsCount() {
         FILE *fp = fopen(demand_filename_.c_str(), "r");
         int res = 0;
