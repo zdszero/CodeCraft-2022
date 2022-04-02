@@ -1,8 +1,11 @@
 #pragma once
 
 #include <string>
+#include <list>
 #include <vector>
 #include <cassert>
+
+#include "stream.hpp"
 
 using namespace std;
 
@@ -35,13 +38,14 @@ class Site {
         ref_clients_.push_back(client_id);
         ref_times_++;
     }
-    void DecreaseBandwith(int usage) {
+    void DecreaseBandwidth(int usage) {
         remain_bandwidth -= usage;
         assert(remain_bandwidth >= 0);
     }
     void Reset() {
         remain_bandwidth = total_bandwidth_;
         full_this_time_ = false;
+        streams_.clear();
     }
     void Restart() {
         remain_bandwidth = total_bandwidth_;
@@ -63,6 +67,13 @@ class Site {
             seperate_ = GetAllocatedBandwidth();
         }
     }
+    void AddStream(const Stream &stream) {
+        DecreaseBandwidth(stream.stream_size);
+        streams_.push_back(stream);
+    }
+    const list<Stream> &GetStreams() const {
+        return streams_;
+    }
 
   private:
     static constexpr double FACTOR = 0.8;
@@ -75,4 +86,6 @@ class Site {
     int cur_full_times_{0};
     int seperate_{0};
     bool full_this_time_{false};
+    // client idx | stream name | stream size
+    list<Stream> streams_;
 };

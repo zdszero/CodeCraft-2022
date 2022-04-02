@@ -81,7 +81,7 @@ void SystemManager::Init() {
     file_parser_.ParseQOS(clients_, qos_constraint_);
     while (file_parser_.ParseDemand(clients_.size(), demands_))
         ;
-    results_ = unique_ptr<ResultSet>(new ResultSet(sites_, base_cost_));
+    results_ = unique_ptr<ResultSet>(new ResultSet(sites_, clients_, base_cost_));
     results_->Reserve(demands_.size());
     // 计算每个site被多少client使用
     for (size_t i = 0; i < clients_.size(); i++) {
@@ -209,8 +209,7 @@ void SystemManager::Process() {
     for (const auto &day_res : *results_) {
         WriteSchedule(day_res);
     }
-
-    results_->ComputeAllSeps();
+    results_->Migrate();
     printf("grade = %d\n", results_->GetGrade());
 }
 
@@ -251,8 +250,9 @@ void SystemManager::GreedyAllocate(Demand &d, int day) {
                 if (it->second[C] == 0) {
                     continue;
                 }
-                site.DecreaseBandwith(it->second[C]);
-                clients_[C].AddAllocationBySiteIndex(max_site_idx, {it->first, it->second[C]});
+                /* site.DecreaseBandwidth(it->second[C]); */
+                site.AddStream(Stream{C, it->first, it->second[C]});
+                clients_[C].AddAllocationBySiteIndex(max_site_idx, Stream{C, it->first, it->second[C]});
                 it->second[C] = 0;
             }
         }
@@ -287,8 +287,9 @@ void SystemManager::BaseAllocate(Demand &d) {
                     continue;
                 }
                 if (site.GetRemainBandwidth() >= v[C]) {
-                    site.DecreaseBandwith(v[C]);
-                    cli.AddAllocation(S, {stream_name, v[C]});
+                    /* site.DecreaseBandwidth(v[C]); */
+                    site.AddStream(Stream{C, stream_name, v[C]});
+                    cli.AddAllocation(S, Stream{C, stream_name, v[C]});
                     v[C] = 0;
                     break;
                 }
@@ -341,9 +342,10 @@ void SystemManager::AverageAllocate(Demand &d) {
                 }
             }
             auto &site = sites_[min_site];
-            site.DecreaseBandwith(v[C]);
+            /* site.DecreaseBandwidth(v[C]); */
+            site.AddStream(Stream{C, stream_name, v[C]});
             site.ResetSeperateBandwidth();
-            cli.AddAllocation(min_S, {stream_name, v[C]});
+            cli.AddAllocation(min_S, Stream{C, stream_name, v[C]});
             v[C] = 0;
             assert(flag == true);
         }
@@ -364,8 +366,8 @@ void SystemManager::WriteSchedule(const Result &res) {
                     fprintf(output_fp_, ",");
                 }
                 fprintf(output_fp_, "<%s", sites_[site_idx].GetName());
-                for (auto &p : allocate_list) {
-                    fprintf(output_fp_, ",%s", p.first.c_str());
+                for (auto &stream : allocate_list) {
+                    fprintf(output_fp_, ",%s", stream.stream_name.c_str());
                 }
                 fprintf(output_fp_, ">");
                 flag = true;
