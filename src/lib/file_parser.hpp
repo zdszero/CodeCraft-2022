@@ -148,6 +148,12 @@ class FileParser {
         return res;
     }
 
+    void RebuildClientMap(const vector<Client> &clis) {
+        for (auto cli : clis) {
+            client_name_map_[cli.name_] = cli.id_;
+        }
+    }
+
   private:
     bool flag{false};
     unordered_map<string, size_t> site_name_map_;

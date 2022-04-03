@@ -79,6 +79,14 @@ void SystemManager::Init() {
     file_parser_.ParseSites(sites_);
     file_parser_.ParseConfig(qos_constraint_, base_cost_);
     file_parser_.ParseQOS(clients_, qos_constraint_);
+    std::sort(clients_.begin(), clients_.end(),
+              [](const Client &l, const Client &r) {
+                  return l.GetSiteCount() < r.GetSiteCount();
+              });
+    for (size_t cli_idx = 0; cli_idx < clients_.size(); cli_idx++) {
+        clients_[cli_idx].SetID(cli_idx);
+    }
+    file_parser_.RebuildClientMap(clients_);
     while (file_parser_.ParseDemand(clients_.size(), demands_))
         ;
     results_ =
@@ -102,7 +110,6 @@ void SystemManager::Init() {
         }
     });
     for (size_t cli_idx = 0; cli_idx < clients_.size(); cli_idx++) {
-        clients_[cli_idx].SetID(cli_idx);
         clients_[cli_idx].ReInit();
     }
     // set variables
