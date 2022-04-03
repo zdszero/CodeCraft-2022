@@ -28,6 +28,7 @@ class Site {
     int GetSeperateBandwidth() const { return static_cast<int>(seperate_); }
     void SetSeperateBandwidth(int sep) { seperate_ = sep; }
     const vector<size_t> &GetRefClients() const { return ref_clients_; }
+    vector<size_t> &GetRefClients() { return ref_clients_; }
 
     void AddRefClient(size_t client_id) {
         ref_clients_.push_back(client_id);

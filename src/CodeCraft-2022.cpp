@@ -98,6 +98,19 @@ void SystemManager::Init() {
             sites_[site_idx].AddRefClient(i);
         }
     }
+    std::for_each(sites_.begin(), sites_.end(), [this](Site &site) {
+        sort(site.GetRefClients().begin(), site.GetRefClients().end(),
+             [this](int l, int r) {
+                auto GetAvailable = [this](int cli_idx) -> int {
+                    int ret = 0;
+                    for (size_t site_idx : clients_[cli_idx].GetAccessibleSite()) {
+                        ret += sites_[site_idx].GetTotalBandwidth() / sites_[site_idx].GetRefTimes();
+                    }
+                    return ret;
+                };
+                 return GetAvailable(l) < GetAvailable(r);
+             });
+    });
     // 将client中的accessible sites根据引用次数排序，并且计算client的总需求量
     std::for_each(clients_.begin(), clients_.end(), [this](Client &cli) {
         sort(cli.GetAccessibleSite().begin(), cli.GetAccessibleSite().end(),
