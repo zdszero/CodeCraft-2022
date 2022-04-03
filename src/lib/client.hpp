@@ -21,18 +21,16 @@ struct AllocationTable {
     void Add(size_t n, const Stream &p) { tbl[n].push_back(p); }
     void MoveStream(const Stream &stream, size_t from, size_t to) {
         bool flag = false;
-        Stream tmp{};
         size_t from_idx = site_map[from];
         size_t to_idx = site_map[to];
         for (auto it = tbl[from_idx].begin(); it != tbl[from_idx].end(); it++) {
             if (*it == stream) {
-                tmp = *it;
                 tbl[from_idx].erase(it);
                 flag = true;
                 break;
             }
         }
-        tbl[to_idx].push_back(tmp);
+        tbl[to_idx].push_back(stream);
         assert(flag);
     }
 };
