@@ -11,7 +11,7 @@
 
 using namespace std;
 
-static constexpr double MIGRATE_FACTOR = 0.7;
+static constexpr double MIGRATE_FACTOR = 0.85;
 inline int FactorSep(int sep) { return static_cast<int>(MIGRATE_FACTOR * sep); }
 
 // 一天中所有客户的分配情况
@@ -168,7 +168,7 @@ inline void ResultSet::Migrate() {
                 break;
             }
             // 更新sep值，避免其他服务器又打到已经migrate过的服务器
-            seps_[site_idx] = site_mig_day.front();
+            // seps_[site_idx] = site_mig_day.front();
         }
     }
 }

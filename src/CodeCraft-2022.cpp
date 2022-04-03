@@ -139,7 +139,7 @@ void SystemManager::PresetMaxSites() {
     std::vector<int> max_site_idx;
     for (size_t i = 0; i < sites_.size(); i++) {
         max_site_idx.push_back(i);
-        sites_[i].SetSeperateBandwidth(sites_[i].GetTotalBandwidth() * 0.07);
+        sites_[i].SetSeperateBandwidth(base_cost_);
     }
     // Sort by site capacity
     auto sites_copy = sites_;
@@ -211,7 +211,7 @@ void SystemManager::Process() {
         auto &d = demands_[day_idx];
         Schedule(d, day_idx);
     }
-    results_->Migrate();
+    /* results_->Migrate(); */
     printf("grade = %d\n", results_->GetGrade());
     for (const auto &day_res : *results_) {
         WriteSchedule(day_res);
@@ -343,8 +343,11 @@ void SystemManager::AverageAllocate(Demand &d) {
                         flag = true;
                         break;
                     }
-                    grade = (used - base_cost_) * (used - base_cost_) * 1.0 /
-                            site.GetTotalBandwidth() * 1.0;
+                    grade = ((used * used - sep * sep -
+                              2 * base_cost_ * (used - sep)) *
+                             1.0) /
+                                (site.GetTotalBandwidth() * 1.0) +
+                            (used - sep);
                     if (grade < min_value) {
                         min_site = site_idx;
                         min_S = S;
@@ -358,9 +361,8 @@ void SystemManager::AverageAllocate(Demand &d) {
             site.AddStream(Stream{cli_idx, static_cast<size_t>(min_site),
                                   stream_name, v[cli_idx]});
             site.ResetSeperateBandwidth();
-            cli.AddStream(min_S,
-                              Stream{cli_idx, static_cast<size_t>(min_site),
-                                     stream_name, v[cli_idx]});
+            cli.AddStream(min_S, Stream{cli_idx, static_cast<size_t>(min_site),
+                                        stream_name, v[cli_idx]});
             v[cli_idx] = 0;
             assert(flag == true);
         }
