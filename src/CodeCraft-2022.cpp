@@ -428,9 +428,15 @@ void SystemManager::WriteSchedule(const Result &res) {
 }
 
 int main() {
+    auto start = chrono::high_resolution_clock::now();
+
     /* SystemManager manager; */
     SystemManager manager("/output/solution.txt");
-
     manager.Init();
     manager.Process();
+
+    auto end = chrono::high_resolution_clock::now();
+    auto duration = chrono::duration_cast<chrono::milliseconds>(end - start);
+    cout << "time taken: " << duration.count() << " ms\n";
+    return 0;
 }
