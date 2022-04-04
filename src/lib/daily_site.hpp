@@ -5,12 +5,12 @@
 #include <string>
 #include <vector>
 
-class Daily_site {
+class daily_site {
   friend class FileParser;
 
 public:
-  Daily_site() = default;
-  Daily_site(int time, int site_idx, int total, int bandwidth)
+  daily_site() = default;
+  daily_site(size_t time, size_t site_idx, int total, int bandwidth)
       : time_(time), site_idx_(site_idx), total_(total),
         total_bandwidth_(bandwidth), remain_bandwidth(bandwidth) {}
 
@@ -23,7 +23,7 @@ public:
   void DecreaseBandwith(int usage) { remain_bandwidth -= usage; }
 
 private:
-  int time_{0}; // time slot
+  size_t time_{0}; // time slot
   int site_idx_{0};
   int total_{0}; //分配到的总流量
 

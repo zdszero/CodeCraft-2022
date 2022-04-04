@@ -42,7 +42,7 @@ class SystemManager {
     vector<Site> sites_;
     vector<Client> clients_;
     vector<Demand> demands_; // demands all mtimes
-    vector<vector<int>> demandsByClient;
+    vector<vector<int>> client_demands_;
     long total_demand_{0};
     long avg_demand_{0};
     long max_demand_{0};
@@ -50,7 +50,7 @@ class SystemManager {
     long over_demand_all_{0};
     int all_full_times_;
     unique_ptr<ResultSet> results_;
-    vector<vector<int>> daily_full_site_idx;
+    vector<vector<int>> daily_full_site_indexes_;
     vector<vector<int>> best_daily_full_site_idx;
 
     // 根据服务器的当前容量，以及被访问次数，动态计算流量分配ratio
@@ -102,13 +102,15 @@ void SystemManager::Init() {
     std::for_each(sites_.begin(), sites_.end(), [this](Site &site) {
         sort(site.GetRefClients().begin(), site.GetRefClients().end(),
              [this](int l, int r) {
-                auto GetAvailable = [this](int cli_idx) -> int {
-                    int ret = 0;
-                    for (size_t site_idx : clients_[cli_idx].GetAccessibleSite()) {
-                        ret += sites_[site_idx].GetTotalBandwidth() / sites_[site_idx].GetRefTimes();
-                    }
-                    return ret;
-                };
+                 auto GetAvailable = [this](int cli_idx) -> int {
+                     int ret = 0;
+                     for (size_t site_idx :
+                          clients_[cli_idx].GetAccessibleSite()) {
+                         ret += sites_[site_idx].GetTotalBandwidth() /
+                                sites_[site_idx].GetRefTimes();
+                     }
+                     return ret;
+                 };
                  return GetAvailable(l) < GetAvailable(r);
              });
     });
@@ -143,67 +145,68 @@ void SystemManager::Init() {
 
     for (size_t i = 0; i < demands_.size(); i++) {
         auto d = demands_[i];
-        demandsByClient.push_back(vector<int>(clients_.size(), 0));
+        client_demands_.push_back(vector<int>(clients_.size(), 0));
         for (size_t j = 0; j < clients_.size(); j++) {
-            demandsByClient[i][j] = d.GetClientDemand(j);
+            client_demands_[i][j] = d.GetClientDemand(j);
         }
     }
 }
 
 struct DailySiteCmp {
-    bool operator()(const Daily_site &a, const Daily_site &b) {
+    bool operator()(const daily_site &a, const daily_site &b) {
         return a.GetTotal() < b.GetTotal();
     }
 };
 
 void SystemManager::PresetMaxSites() {
-    std::vector<int> max_site_idx;
+    std::vector<size_t> max_site_indexes;
     for (size_t i = 0; i < sites_.size(); i++) {
-        max_site_idx.push_back(i);
+        max_site_indexes.push_back(i);
         sites_[i].SetSeperateBandwidth(base_cost_);
     }
     // Sort by site capacity
     auto sites_copy = sites_;
-    sort(max_site_idx.begin(), max_site_idx.end(), [&sites_copy] (size_t l, size_t r) {
-        return sites_copy[l].GetTotalBandwidth() > sites_copy[r].GetTotalBandwidth();
-    });
-    sort(sites_copy.begin(), sites_copy.end(), [](const Site &l, const Site &r) {
-        return l.GetTotalBandwidth() > r.GetTotalBandwidth();
-    });
+    sort(max_site_indexes.begin(), max_site_indexes.end(),
+         [&sites_copy](size_t l, size_t r) {
+             return sites_copy[l].GetTotalBandwidth() >
+                    sites_copy[r].GetTotalBandwidth();
+         });
+    sort(sites_copy.begin(), sites_copy.end(),
+         [](const Site &l, const Site &r) {
+             return l.GetTotalBandwidth() > r.GetTotalBandwidth();
+         });
 
     // 按照site容量降序计算在哪一天打满
-    auto demands_copy = demandsByClient;
-    daily_full_site_idx.clear();
-    for (size_t demands_idx = 0; demands_idx < demands_.size(); demands_idx++) {
-        daily_full_site_idx.push_back(std::vector<int>());
-    }
-    for (int site_index : max_site_idx) {
-        std::priority_queue<Daily_site, std::vector<Daily_site>, DailySiteCmp>
+    auto client_demands_cpy = client_demands_;
+    daily_full_site_indexes_.resize(demands_.size(), vector<int>());
+    for (size_t site_idx : max_site_indexes) {
+        std::priority_queue<daily_site, std::vector<daily_site>, DailySiteCmp>
             site_max_req;
-        for (size_t demands_idx = 0; demands_idx < demands_copy.size();
+        // 找出每个服务器打得最满的%5天
+        for (size_t demands_idx = 0; demands_idx < client_demands_cpy.size();
              demands_idx++) {
-            auto &demand = demands_copy[demands_idx];
             int cur_sum = 0;
-            for (int cli_idex : sites_[site_index].GetRefClients()) {
-                cur_sum += demand[cli_idex] / clients_[cli_idex].GetSiteCount();
+            for (size_t cli_idx : sites_[site_idx].GetRefClients()) {
+                cur_sum += client_demands_cpy[demands_idx][cli_idx] /
+                           clients_[cli_idx].GetSiteCount();
                 //((sites_[site_index].GetTotalBandwidth() * 1.0) /
                 //(1.0 * clients_[cli_idex].GetAccessTotal()));
             }
             if (cur_sum > 0) {
                 site_max_req.push(
-                    {static_cast<int>(demands_idx), site_index,
-                     cur_sum - sites_[site_index].GetSeperateBandwidth(),
-                     sites_[site_index].GetTotalBandwidth()});
+                    {demands_idx, site_idx,
+                     cur_sum - sites_[site_idx].GetSeperateBandwidth(),
+                     sites_[site_idx].GetTotalBandwidth()});
             }
         }
         for (int j = 0; j < (int)(demands_.size() * 0.05); j++) {
             if (site_max_req.empty()) {
                 break;
             }
-            Daily_site daily_site = site_max_req.top();
+            daily_site daily_site = site_max_req.top();
             int cur_time = daily_site.GetTime();
             int remainBandwidth = daily_site.GetRemainBandwidth();
-            auto &demand = demands_copy[cur_time];
+            auto &demand = client_demands_cpy[cur_time];
             for (int c : sites_[daily_site.GetSiteIdx()].GetRefClients()) {
                 if (demand[c] == 0) {
                     continue;
@@ -217,7 +220,8 @@ void SystemManager::PresetMaxSites() {
                     break;
                 }
             }
-            daily_full_site_idx[cur_time].push_back(daily_site.GetSiteIdx());
+            daily_full_site_indexes_[cur_time].push_back(
+                daily_site.GetSiteIdx());
             site_max_req.pop();
         }
     }
@@ -234,7 +238,7 @@ void SystemManager::Process() {
         return demands_[l].GetTotalDemand() < demands_[r].GetTotalDemand();
     });
     for (size_t day_idx : days) {
-    /* for (size_t day_idx = 0; day_idx < demands_.size(); day_idx++) { */
+        /* for (size_t day_idx = 0; day_idx < demands_.size(); day_idx++) { */
         auto &d = demands_[day_idx];
         Schedule(d, day_idx);
     }
@@ -269,10 +273,10 @@ void SystemManager::Schedule(Demand &d, int day) {
 
 void SystemManager::GreedyAllocate(Demand &d, int day) {
     auto &need = d.GetStreamDemands();
-    if (daily_full_site_idx[day].empty()) {
+    if (daily_full_site_indexes_[day].empty()) {
         return;
     }
-    for (int max_site_idx : daily_full_site_idx[day]) {
+    for (int max_site_idx : daily_full_site_indexes_[day]) {
         if (max_site_idx == -1) {
             return;
         }
