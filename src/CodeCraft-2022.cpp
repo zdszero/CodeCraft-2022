@@ -151,7 +151,7 @@ void SystemManager::Init() {
 }
 
 struct DailySiteCmp {
-    bool operator()(Daily_site a, Daily_site b) {
+    bool operator()(const Daily_site &a, const Daily_site &b) {
         return a.GetTotal() < b.GetTotal();
     }
 };
@@ -164,15 +164,12 @@ void SystemManager::PresetMaxSites() {
     }
     // Sort by site capacity
     auto sites_copy = sites_;
-    for (size_t ii = 0; ii < sites_.size(); ii++) {
-        for (size_t jj = sites_.size() - 1; jj > 0; jj--) {
-            if (sites_copy[jj].GetTotalBandwidth() >
-                sites_copy[jj - 1].GetTotalBandwidth()) {
-                std::swap(sites_copy[jj], sites_copy[jj - 1]);
-                std::swap(max_site_idx[jj], max_site_idx[jj - 1]);
-            }
-        }
-    }
+    sort(max_site_idx.begin(), max_site_idx.end(), [&sites_copy] (size_t l, size_t r) {
+        return sites_copy[l].GetTotalBandwidth() > sites_copy[r].GetTotalBandwidth();
+    });
+    sort(sites_copy.begin(), sites_copy.end(), [](const Site &l, const Site &r) {
+        return l.GetTotalBandwidth() > r.GetTotalBandwidth();
+    });
 
     // 按照site容量降序计算在哪一天打满
     auto demands_copy = demandsByClient;

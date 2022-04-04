@@ -17,7 +17,7 @@ public:
   void SetTotal(int total) { total_ = total; }
   int GetTime() const { return time_; }
   int GetSiteIdx() const { return site_idx_; }
-  int GetTotal() { return total_; }
+  int GetTotal() const { return total_; }
   int GetTotalBandwidth() const { return total_bandwidth_; }
   int GetRemainBandwidth() const { return remain_bandwidth; }
   void DecreaseBandwith(int usage) { remain_bandwidth -= usage; }
