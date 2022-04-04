@@ -73,6 +73,7 @@ class Result {
             cli_tbl.MoveStream(*it, From, To);
             site_loads_[To] += it->stream_size;
             site_loads_[From] -= it->stream_size;
+            it->site_idx = To;
             site_streams_[To].push_back(*it);
             it = site_streams_[From].erase(it);
             if (cur_load < FactorSep(seps[From].first)) {

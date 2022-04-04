@@ -241,7 +241,9 @@ void SystemManager::Process() {
         auto &d = demands_[day_idx];
         Schedule(d, day_idx);
     }
-    results_->Migrate();
+    for (size_t times = 0; times < 5; times++) {
+        results_->Migrate();
+    }
     printf("grade = %d\n", results_->GetGrade());
     for (const auto &day_res : *results_) {
         WriteSchedule(day_res);

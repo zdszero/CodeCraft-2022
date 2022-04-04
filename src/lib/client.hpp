@@ -23,14 +23,16 @@ struct AllocationTable {
         bool flag = false;
         size_t from_idx = site_map[from];
         size_t to_idx = site_map[to];
+        Stream stream_cpy{stream};
         for (auto it = tbl[from_idx].begin(); it != tbl[from_idx].end(); it++) {
-            if (*it == stream) {
+            if (*it == stream_cpy) {
                 tbl[from_idx].erase(it);
                 flag = true;
                 break;
             }
         }
-        tbl[to_idx].push_back(stream);
+        stream_cpy.site_idx = to;
+        tbl[to_idx].push_back(stream_cpy);
         assert(flag);
     }
 };
