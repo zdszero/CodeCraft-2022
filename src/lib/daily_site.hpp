@@ -5,12 +5,12 @@
 #include <string>
 #include <vector>
 
-class daily_site {
+class DailySite {
   friend class FileParser;
 
 public:
-  daily_site() = default;
-  daily_site(size_t time, size_t site_idx, int total, int bandwidth)
+  DailySite() = default;
+  DailySite(size_t time, size_t site_idx, int total, int bandwidth)
       : time_(time), site_idx_(site_idx), total_(total),
         total_bandwidth_(bandwidth), remain_bandwidth(bandwidth) {}
 
