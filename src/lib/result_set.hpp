@@ -109,7 +109,9 @@ class ResultSet {
     }
     void Migrate();
     void Reserve(size_t n) { days_result_.reserve(n); }
+    void Resize(size_t n) { days_result_.resize(n); }
     void AddResult(Result &&day_res) { days_result_.push_back(day_res); }
+    void SetResult(size_t day, Result &&day_res) { days_result_[day] = std::move(day_res); }
     int GetGrade();
     ResultSetIter begin() { return days_result_.begin(); }
     ResultSetIter end() { return days_result_.end(); }

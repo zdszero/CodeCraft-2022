@@ -91,7 +91,8 @@ void SystemManager::Init() {
         ;
     results_ =
         unique_ptr<ResultSet>(new ResultSet(sites_, clients_, base_cost_));
-    results_->Reserve(demands_.size());
+    /* results_->Reserve(demands_.size()); */
+    results_->Resize(demands_.size());
     // 计算每个site被多少client使用
     for (size_t i = 0; i < clients_.size(); i++) {
         for (const auto site_idx : clients_[i].GetAccessibleSite()) {
@@ -227,7 +228,16 @@ void SystemManager::PresetMaxSites() {
 
 void SystemManager::Process() {
     PresetMaxSites();
+    // 对访问demand的顺序进行排序
+    vector<size_t> days;
     for (size_t day_idx = 0; day_idx < demands_.size(); day_idx++) {
+        days.push_back(day_idx);
+    }
+    sort(days.begin(), days.end(), [this](size_t l, size_t r) {
+        return demands_[l].GetTotalDemand() < demands_[r].GetTotalDemand();
+    });
+    for (size_t day_idx : days) {
+    /* for (size_t day_idx = 0; day_idx < demands_.size(); day_idx++) { */
         auto &d = demands_[day_idx];
         Schedule(d, day_idx);
     }
@@ -254,7 +264,8 @@ void SystemManager::Schedule(Demand &d, int day) {
     for (auto &site : sites_) {
         site.ResetSeperateBandwidth();
     }
-    results_->AddResult(Result(clients_, sites_));
+    /* results_->AddResult(Result(clients_, sites_)); */
+    results_->SetResult(day, Result(clients_, sites_));
 }
 
 void SystemManager::GreedyAllocate(Demand &d, int day) {
