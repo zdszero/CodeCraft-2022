@@ -50,7 +50,7 @@ public:
             auto &cli_tbl = cli_tbls_[it->cli_idx];
             auto &cli_ref = cli_refs[it->cli_idx];
             int To = -1;
-            double min_ratio = 1.0;
+            double max_ratio = 0.0;
             // choose To server to move
             for (size_t candidate : cli_ref) {
                 if (candidate == From) {
@@ -58,8 +58,8 @@ public:
                 }
                 // if server[To] used size is less than factor * cap
                 double rat = 1.0 * (site_loads_[candidate] + it->stream_size) / seps[candidate].first;
-                if (rat < min_ratio) {
-                    min_ratio = rat;
+                if (rat > max_ratio && rat <= 1.0) {
+                    max_ratio = rat;
                     To = static_cast<int>(candidate);
                     break;
                 }
