@@ -18,7 +18,7 @@ inline int FactorSep(int sep) { return static_cast<int>(MIGRATE_FACTOR * sep); }
 class Result {
     friend class ResultSet;
 
-  public:
+public:
     Result() = default;
     explicit Result(const vector<Client> &clients, const vector<Site> &sites) {
         cli_tbls_.reserve(clients.size());
@@ -39,8 +39,8 @@ class Result {
         return cli_tbls_[C].tbl[S];
     }
     // migrate streams from server[From] to other accessible servers
-    bool Migrate(size_t From, vector<pair<int, size_t>> &seps,
-                 std::vector<std::vector<size_t>> &cli_refs) {
+    int Migrate(size_t From, vector<pair<int, size_t>> &seps,
+                 std::vector<std::vector<size_t>> &cli_refs, int base) {
         bool ret = false;
         int cur_load = site_loads_[From];
         for (auto it = site_streams_[From].begin();
@@ -50,7 +50,7 @@ class Result {
             auto &cli_tbl = cli_tbls_[it->cli_idx];
             auto &cli_ref = cli_refs[it->cli_idx];
             int To = -1;
-            double min_ratio = MIGRATE_FACTOR;
+            double min_ratio = 1.0;
             // choose To server to move
             for (size_t candidate : cli_ref) {
                 if (candidate == From) {
@@ -76,15 +76,15 @@ class Result {
             it->site_idx = To;
             site_streams_[To].push_back(*it);
             it = site_streams_[From].erase(it);
-            if (cur_load < FactorSep(seps[From].first)) {
-                ret = true;
+            if (cur_load <= base) {
+                // ret = true;
                 break;
             }
         }
-        return ret;
+        return cur_load;
     }
 
-  private:
+private:
     vector<AllocationTable> cli_tbls_;
     vector<int> site_loads_;
     vector<list<Stream>> site_streams_;
@@ -94,11 +94,11 @@ class Result {
 class ResultSet {
     using ResultSetIter = std::vector<Result>::iterator;
 
-  public:
+public:
     ResultSet() = default;
     ResultSet(const std::vector<Site> &sites, std::vector<Client> &clis,
               int base)
-        : base_(base) {
+            : base_(base) {
         sites_caps_.reserve(sites.size());
         for (const auto &site : sites) {
             sites_caps_.push_back(site.GetTotalBandwidth());
@@ -117,7 +117,7 @@ class ResultSet {
     ResultSetIter begin() { return days_result_.begin(); }
     ResultSetIter end() { return days_result_.end(); }
 
-  private:
+private:
     std::vector<Result> days_result_;
     std::vector<bool> is_always_empty_;
     // 没一台服务器，当前的<95分位值，对应的天>
@@ -152,7 +152,7 @@ inline int ResultSet::GetGrade() {
             grade += base_;
         } else {
             grade += static_cast<int>(pow(1.0 * (seps_[S].first - base_), 2) /
-                                          sites_caps_[S] +
+                                      sites_caps_[S] +
                                       seps_[S].first);
         }
     }
@@ -165,32 +165,62 @@ inline void ResultSet::Migrate() {
     for (size_t i = 0; i < site_indexes.size(); i++) {
         site_indexes[i] = i;
     }
+//    sort(site_indexes.begin(), site_indexes.end(), [this](size_t l, size_t r) {
+//        auto getval = [this](size_t i) -> double {
+//            long sum = 0;
+//            for (const auto &p : site_migrate_days_[i]) {
+//                sum += (p.first - static_cast<int>(seps_[i].first * MIGRATE_FACTOR));
+//            }
+//            return (1.0 * sum) / (seps_[i].first * (1 - MIGRATE_FACTOR));
+//        };
+//        return getval(l) < getval(r);
+//    });
     sort(site_indexes.begin(), site_indexes.end(), [this](size_t l, size_t r) {
-            auto getval = [this](size_t i) -> double {
-                long sum = 0;
-                for (const auto &p : site_migrate_days_[i]) {
-                    sum += (p.first - static_cast<int>(seps_[i].first * MIGRATE_FACTOR));
-                }
-                return (1.0 * sum) / (seps_[i].first * (1 - MIGRATE_FACTOR));
-            };
-            return getval(l) < getval(r);
-        });
+        auto getval = [this](size_t i) -> double {
+            long sum = 0;
+            for(auto p : site_migrate_days_[i]) {
+                sum += p.first;
+            }
+            long ave = (sum * 1.0) / (site_migrate_days_[i].size() * 1.0);
+            long vari = 0;
+
+            for (const auto &p : site_migrate_days_[i]) {
+                vari += pow((p.first - ave),2);
+            }
+            return (vari * 1.0) / (site_migrate_days_[i].size() * 1.0);
+        };
+        return getval(l) > getval(r);
+    });
     for (auto site_idx : site_indexes) {
         auto &site_mig_day = site_migrate_days_[site_idx];
+        int base = base_;
+        int cur_used = 0;
+        int sep_day = -1;
         for (auto it = site_mig_day.begin(); it != site_mig_day.end();) {
             size_t day = it->second;
+            if(it->first <= base) {
+                break;
+            }
             // 将第day天的site_idx号服务器的请求分配到其他服务器
             /* bool ret = */
-            days_result_[day].Migrate(site_idx, seps_, cli_ref_sites_idx_);
+
+            cur_used = days_result_[day].Migrate(site_idx, seps_, cli_ref_sites_idx_, base);
             /* if (ret == false) { */
             /*     break; */
             /* } */
+            if(cur_used >= base) {
+                base = cur_used;
+                sep_day = day;
+            }
             it = site_mig_day.erase(it);
             if (site_mig_day.empty()) {
                 break;
             }
             // 更新sep值，避免其他服务器又打到已经migrate过的服务器
             // seps_[site_idx] = site_mig_day.front();
+        }
+        if(sep_day != -1) {
+            seps_[site_idx] = {base, sep_day};
         }
     }
 }
@@ -226,8 +256,7 @@ inline void ResultSet::ComputeAllSeps(bool set_migrate) {
                 continue;
             }
             for (int i = static_cast<int>(sep_idx); i >= 0; i--) {
-                if (arr[i].first <=
-                    static_cast<int>(arr[sep_idx].first * MIGRATE_FACTOR)) {
+                if (arr[i].first <= base_) {
                     break;
                 }
                 site_migrate_days_[site_idx].push_back(arr[i]);
