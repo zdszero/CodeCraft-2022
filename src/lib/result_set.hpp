@@ -40,9 +40,10 @@ public:
     }
     // migrate streams from server[From] to other accessible servers
     int Migrate(size_t From, vector<pair<int, size_t>> &seps,
-                 std::vector<std::vector<size_t>> &cli_refs, int base) {
-        bool ret = false;
+                std::vector<std::vector<size_t>> &cli_refs, int base,
+                int base_cost, vector<int> &sites_cap, int day, bool isSep) {
         int cur_load = site_loads_[From];
+
         for (auto it = site_streams_[From].begin();
              it != site_streams_[From].end();) {
             assert(it->site_idx == From);
@@ -50,16 +51,17 @@ public:
             auto &cli_tbl = cli_tbls_[it->cli_idx];
             auto &cli_ref = cli_refs[it->cli_idx];
             int To = -1;
-            double max_ratio = 0.0;
+            int min_free = numeric_limits<int>::max();
+            int max_dec_cost = 0;
             // choose To server to move
             for (size_t candidate : cli_ref) {
                 if (candidate == From) {
                     continue;
                 }
                 // if server[To] used size is less than factor * cap
-                double rat = 1.0 * (site_loads_[candidate] + it->stream_size) / seps[candidate].first;
-                if (rat > max_ratio && rat <= 1.0) {
-                    max_ratio = rat;
+                int free = seps[candidate].first - site_loads_[candidate] - it->stream_size;
+                if (free < min_free && free >= 0) {
+                    min_free = free;
                     To = static_cast<int>(candidate);
                     break;
                 }
@@ -72,6 +74,9 @@ public:
             cur_load -= it->stream_size;
             cli_tbl.MoveStream(*it, From, To);
             site_loads_[To] += it->stream_size;
+            if(site_loads_[To] > seps[To].first) {
+                seps[To] = {site_loads_[To], day};
+            }
             site_loads_[From] -= it->stream_size;
             it->site_idx = To;
             site_streams_[To].push_back(*it);
@@ -144,10 +149,12 @@ inline int ResultSet::GetGrade() {
         }
     }
     printf("\n");
+    int total = 0;
     for (size_t S = 0; S < seps_.size(); S++) {
         if (is_always_empty_[S]) {
             continue;
         }
+        total += seps_[S].first;
         if (seps_[S].first <= base_) {
             grade += base_;
         } else {
@@ -156,6 +163,7 @@ inline int ResultSet::GetGrade() {
                                       seps_[S].first);
         }
     }
+    printf("total:%d\n", total);
     return grade;
 }
 
@@ -193,9 +201,10 @@ inline void ResultSet::Migrate() {
     });
     for (auto site_idx : site_indexes) {
         auto &site_mig_day = site_migrate_days_[site_idx];
-        int base = base_;
+        int base = base_;//
         int cur_used = 0;
         int sep_day = -1;
+        bool isSep = true;
         for (auto it = site_mig_day.begin(); it != site_mig_day.end();) {
             size_t day = it->second;
             if(it->first <= base) {
@@ -204,7 +213,9 @@ inline void ResultSet::Migrate() {
             // 将第day天的site_idx号服务器的请求分配到其他服务器
             /* bool ret = */
 
-            cur_used = days_result_[day].Migrate(site_idx, seps_, cli_ref_sites_idx_, base);
+            cur_used = days_result_[day].Migrate(site_idx, seps_, cli_ref_sites_idx_,
+                                                 base, base_, sites_caps_, day, isSep);
+            isSep = false;
             /* if (ret == false) { */
             /*     break; */
             /* } */
@@ -231,6 +242,9 @@ inline void ResultSet::ComputeAllSeps(bool set_migrate) {
     seps_.resize(site_count, {0, 0});
     if (set_migrate) {
         site_migrate_days_.resize(site_count, list<pair<int, size_t>>{});
+        for (auto &l : site_migrate_days_) {
+            l.clear();
+        }
     }
     is_always_empty_.resize(site_count, false);
     for (size_t site_idx = 0; site_idx < site_count; site_idx++) {
@@ -252,7 +266,7 @@ inline void ResultSet::ComputeAllSeps(bool set_migrate) {
         }
         // get migrate days
         if (set_migrate) {
-            if (static_cast<int>(arr[sep_idx].first * MIGRATE_FACTOR) <= base_) {
+            if (static_cast<int>(arr[sep_idx].first) <= base_) {
                 continue;
             }
             for (int i = static_cast<int>(sep_idx); i >= 0; i--) {
