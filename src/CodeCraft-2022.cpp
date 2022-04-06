@@ -274,6 +274,7 @@ void SystemManager::Process() {
     for (size_t times = 0; times < 20; times++) {
         results_->Migrate();
     }
+    results_->Adjust95();
     printf("grade = %d\n", results_->GetGrade());
     for (const auto &day_res : *results_) {
         WriteSchedule(day_res);
@@ -297,7 +298,7 @@ void SystemManager::Schedule(Demand &d, int day) {
         site.ResetSeperateBandwidth();
     }
     /* results_->AddResult(Result(clients_, sites_)); */
-    results_->SetResult(day, Result(clients_, sites_));
+    results_->SetResult(day, Result(day, clients_, sites_));
 }
 
 void SystemManager::GreedyAllocate(Demand &d, int day) {
