@@ -79,26 +79,13 @@ void SystemManager::Init() {
     file_parser_.ParseSites(sites_);
     file_parser_.ParseConfig(qos_constraint_, base_cost_);
     file_parser_.ParseQOS(clients_, qos_constraint_);
-    std::sort(clients_.begin(), clients_.end(),
-              [](const Client &l, const Client &r) {
-                  return l.GetSiteCount() < r.GetSiteCount();
-              });
-    for (size_t cli_idx = 0; cli_idx < clients_.size(); cli_idx++) {
-        clients_[cli_idx].SetID(cli_idx);
-    }
-    file_parser_.RebuildClientMap(clients_);
-    while (file_parser_.ParseDemand(clients_.size(), demands_))
-        ;
-    results_ =
-        unique_ptr<ResultSet>(new ResultSet(sites_, clients_, base_cost_));
-    /* results_->Reserve(demands_.size()); */
-    results_->Resize(demands_.size());
-    // 计算每个site被多少client使用
+    // 向服务器中添加客户
     for (size_t i = 0; i < clients_.size(); i++) {
         for (const auto site_idx : clients_[i].GetAccessibleSite()) {
             sites_[site_idx].AddRefClient(i);
         }
     }
+    // 对服务器中的客户进行排序
     std::for_each(sites_.begin(), sites_.end(), [this](Site &site) {
         sort(site.GetRefClients().begin(), site.GetRefClients().end(),
              [this](int l, int r) {
@@ -114,6 +101,28 @@ void SystemManager::Init() {
                  return GetAvailable(l) < GetAvailable(r);
              });
     });
+    // 对客户进行排序
+    /* std::sort(clients_.begin(), clients_.end(), */
+    /*           [](const Client &l, const Client &r) { */
+    /*               return l.GetSiteCount() < r.GetSiteCount(); */
+    /*           }); */
+    std::sort(clients_.begin(), clients_.end(),
+              [this](const Client &l, const Client &r) {
+                  auto GetAvailable = [this](const Client &cli) -> int {
+                      int ret = 0;
+                      for (size_t site_idx : cli.GetAccessibleSite()) {
+                          ret += sites_[site_idx].GetTotalBandwidth() /
+                                 sites_[site_idx].GetRefTimes();
+                      }
+                      return ret;
+                  };
+                  return GetAvailable(l) < GetAvailable(r);
+              });
+    unordered_map<size_t, size_t> cli_idx_map;
+    for (size_t cli_idx = 0; cli_idx < clients_.size(); cli_idx++) {
+        cli_idx_map[clients_[cli_idx].GetID()] = cli_idx;
+        clients_[cli_idx].SetID(cli_idx);
+    }
     // 将client中的accessible sites根据引用次数排序，并且计算client的总需求量
     std::for_each(clients_.begin(), clients_.end(), [this](Client &cli) {
         sort(cli.GetAccessibleSite().begin(), cli.GetAccessibleSite().end(),
@@ -128,6 +137,17 @@ void SystemManager::Init() {
     for (size_t cli_idx = 0; cli_idx < clients_.size(); cli_idx++) {
         clients_[cli_idx].ReInit();
     }
+    file_parser_.RebuildClientMap(clients_);
+    for (auto &site : sites_) {
+        site.ResetClientIndex(cli_idx_map);
+    }
+    //
+    while (file_parser_.ParseDemand(clients_.size(), demands_))
+        ;
+    results_ =
+        unique_ptr<ResultSet>(new ResultSet(sites_, clients_, base_cost_));
+    /* results_->Reserve(demands_.size()); */
+    results_->Resize(demands_.size());
     // set variables
     for (const auto &d : demands_) {
         long cur_total = d.GetTotalDemand();
@@ -366,7 +386,7 @@ void SystemManager::GreedyAllocate(Demand &d, int day) {
                 return l->second[cli_idx] > r->second[cli_idx];
             });
             for (auto it : its) {
-            /* for (auto it = need.begin(); it != need.end(); it++) { */
+                /* for (auto it = need.begin(); it != need.end(); it++) { */
                 if (it->second[cli_idx] > site.GetRemainBandwidth()) {
                     continue;
                 }

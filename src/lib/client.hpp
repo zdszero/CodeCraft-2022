@@ -63,6 +63,7 @@ class Client {
             l.clear();
         }
     }
+    size_t GetID() const { return id_; }
     void SetID(size_t id) { id_ = id; }
 
     const char *GetName() const { return name_.c_str(); }

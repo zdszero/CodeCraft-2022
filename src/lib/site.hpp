@@ -5,6 +5,7 @@
 #include <list>
 #include <string>
 #include <vector>
+#include <unordered_map>
 
 #include "stream.hpp"
 
@@ -87,6 +88,11 @@ class Site {
         printf("\n");
     }
     const list<Stream> &GetStreams() const { return streams_; }
+    void ResetClientIndex(unordered_map<size_t, size_t> &cli_map) {
+        for (auto &cli_idx : ref_clients_) {
+            cli_idx = cli_map[cli_idx];
+        }
+    }
 
   private:
     static constexpr double FACTOR = 0.8;
