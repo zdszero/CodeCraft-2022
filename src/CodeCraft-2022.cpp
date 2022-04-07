@@ -305,6 +305,7 @@ void SystemManager::Process() {
     for (size_t times = 0; times < 20; times++) {
         results_->Migrate();
     }
+    results_->ExpelTop5();
     /* for (auto &site : sites_) { */
     /*     site.PrintClients(); */
     /* } */
