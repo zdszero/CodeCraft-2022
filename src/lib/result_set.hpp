@@ -53,7 +53,7 @@ class Result {
             auto &cli_ref = cli_refs[it->cli_idx];
             int To = -1;
             int min_free = numeric_limits<int>::max();
-            int max_dec_cost = 0;
+            /* int max_dec_cost = 0; */
             // choose To server to move
             for (size_t candidate : cli_ref) {
                 if (candidate == From) {
@@ -91,123 +91,6 @@ class Result {
         return cur_load;
     }
 
-    bool Adjust95(size_t From, vector<int> caps,
-                  vector<list<pair<int, size_t>>> &site_migrate_days,
-                  vector<vector<size_t>> &cli_refs, int base) {
-        auto grade_change = [base](int a1, int a2, int acap, int b1, int b2,
-                                   int bcap) {
-            auto get_grade = [base](int load, int cap) -> int {
-                if (load <= base) {
-                    return base;
-                } else {
-                    return static_cast<int>(
-                        pow(1.0 * (load - base), 2) / (1.0 * cap) + load);
-                }
-            };
-            return get_grade(a2, acap) + get_grade(b2, bcap) -
-                   get_grade(a1, acap) - get_grade(b1, bcap);
-        };
-        bool ret = false;
-        auto &from_lst = site_migrate_days[From];
-        if (from_lst.empty()) {
-            return ret;
-        }
-        // 对于每一个流
-        for (auto it = site_streams_[From].begin();
-             it != site_streams_[From].end();) {
-            assert(it->site_idx == From);
-            // which client is the stream from
-            auto &cli_tbl = cli_tbls_[it->cli_idx];
-            auto &cli_ref = cli_refs[it->cli_idx];
-            int To = -1;
-            int best_change = 0;
-            int change = 0;
-            // choose To server to move
-            for (size_t candidate : cli_ref) {
-                if (candidate == From) {
-                    continue;
-                }
-                // 如果candidate加上这个流量仍然不会超过sep，则可以添加
-                auto cand_sep = site_migrate_days[candidate].front();
-                if (site_loads_[candidate] + it->stream_size < cand_sep.first) {
-                    To = static_cast<int>(candidate);
-                    break;
-                }
-                // 如果candidate无法承载这个迁移流量了，continue
-                if (site_loads_[candidate] + it->stream_size >
-                    caps[candidate]) {
-                    continue;
-                }
-                auto next_it = next(from_lst.begin(), 1);
-                if (next_it == from_lst.end()) {
-                    continue;
-                }
-                auto next_sep = *next_it;
-                change = grade_change(
-                    site_loads_[From],
-                    max(site_loads_[From] - it->stream_size, next_sep.first), // 取减去迁移量后的最大值
-                    caps[From],
-                    cand_sep.first,
-                    max(site_loads_[candidate] + it->stream_size, cand_sep.first), // 取加上迁移量后的最大值
-                    caps[candidate]);
-                if (change < best_change) {
-                    best_change = change;
-                    To = static_cast<int>(candidate);
-                    break;
-                }
-            }
-            // 如果当前流不可迁移，continue
-            if (To == -1) {
-                it++;
-                continue;
-            }
-            // best change可能为0
-            printf("best change = %d\n", best_change);
-            ret = true;
-            // 迁移过程
-            cli_tbl.MoveStream(*it, From, To);
-            site_loads_[To] += it->stream_size;
-            site_loads_[From] -= it->stream_size;
-            it->site_idx = To;
-            site_streams_[To].push_back(*it);
-            it = site_streams_[From].erase(it);
-            // 更新To的sep和migrate info
-            auto to_lst = site_migrate_days[To];
-            auto to_sep = to_lst.front();
-            if (site_loads_[To] > to_sep.first) {
-                auto it = to_lst.begin();
-                for (; it != to_lst.end(); it++) {
-                    if (it->second == day_) {
-                        to_lst.erase(it);
-                        break;
-                    }
-                }
-                to_lst.push_front(*it);
-                it->first = site_loads_[To];
-            }
-            // 更新From的sep和migrate info
-            auto next_it = next(from_lst.begin(), 1);
-            if (next_it == from_lst.end()) {
-                continue;
-            }
-            auto next_sep = *next_it;
-            if (site_loads_[From] < next_sep.first) {
-                pair<int, size_t> entry = {site_loads_[From], day_};
-                from_lst.pop_front();
-                for (auto it = from_lst.begin(); it != from_lst.end(); it++) {
-                    if (it->first < entry.first) {
-                        from_lst.insert(it, entry);
-                    }
-                }
-                break;
-            } else {
-                assert(from_lst.front().second == day_);
-                from_lst.front().first = site_loads_[From];
-            }
-        }
-        return ret;
-    }
-
   private:
     size_t day_;
     vector<AllocationTable> cli_tbls_;
@@ -217,6 +100,7 @@ class Result {
 
 // 所有天的客户分配情况
 class ResultSet {
+    friend class Result;
     using ResultSetIter = std::vector<Result>::iterator;
 
   public:
@@ -243,32 +127,8 @@ class ResultSet {
     int GetGrade();
     ResultSetIter begin() { return days_result_.begin(); }
     ResultSetIter end() { return days_result_.end(); }
-    void Adjust95() {
-        ComputeAllSeps(true);
-        vector<size_t> site_indexes(site_migrate_days_.size(), 0);
-        set<size_t> refs;
-        for (size_t site_idx = 0; site_idx < site_indexes.size(); site_idx++) {
-            if (site_migrate_days_[site_idx].empty()) {
-                continue;
-            }
-            // update seps
-            /* auto it = site_migrate_days_[site_idx].begin(); */
-            /* assert(it->first == seps_[site_idx].first); */
-            /* it++; */
-            /* if (it == site_migrate_days_[site_idx].end()) { */
-            /*     continue; */
-            /* } */
-            /* days_result_[seps_[site_idx].second].Adjust95(site_idx, seps_, sites_caps_, cli_ref_sites_idx_, base_, next_sep); */
-            refs.clear();
-            size_t day = site_migrate_days_[site_idx].front().second;
-            do {
-                refs.insert(day);
-                days_result_[seps_[site_idx].second].Adjust95(site_idx, sites_caps_, site_migrate_days_, cli_ref_sites_idx_, base_);
-                day = site_migrate_days_[site_idx].front().second;
-            } while(!refs.count(day));
-            /* if (ret) break; */
-        }
-    }
+    
+    void PrintLoads();
 
   private:
     std::vector<Result> days_result_;
@@ -290,10 +150,11 @@ inline int ResultSet::GetGrade() {
     int grade = 0;
     printf("all 95 seperators:\n");
     int cnt = 0;
+    printf("0: ");
     for (auto &sep : seps_) {
         printf("%5d ", sep.first);
         if (++cnt % 5 == 0) {
-            printf("\n");
+            printf("\n%d: ", cnt);
         }
     }
     printf("\n");
@@ -428,4 +289,34 @@ inline void ResultSet::ComputeAllSeps(bool set_migrate) {
             }
         }
     }
+}
+
+inline void ResultSet::PrintLoads() {
+    assert(not days_result_.empty());
+    size_t site_count = days_result_[0].site_loads_.size();
+    seps_.resize(site_count, {0, 0});
+    is_always_empty_.resize(site_count, false);
+    for (size_t site_idx = 0; site_idx < site_count; site_idx++) {
+        // load, day
+        vector<pair<int, size_t>> arr;
+        arr.clear();
+        arr.reserve(days_result_.size());
+        for (size_t day = 0; day < days_result_.size(); day++) {
+            arr.push_back({days_result_[day].site_loads_[site_idx], day});
+        }
+        std::sort(arr.begin(), arr.end(),
+                  [](const pair<int, size_t> &l, const pair<int, size_t> &r) {
+                      return l.first < r.first;
+                  });
+        size_t sep_idx = ceil(arr.size() * 0.95) - 1;
+        seps_[site_idx] = arr[sep_idx];
+        if (seps_[site_idx].first > base_) {
+            printf("site %ld loads:\n", site_idx);
+            for (auto &e : arr) {
+                printf("<%d,%ld> ", e.first, e.second);
+            }
+            printf("\n");
+        }
+    }
+
 }

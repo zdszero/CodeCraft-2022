@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cassert>
 #include <list>
 #include <numeric>
@@ -95,6 +96,15 @@ class Client {
         assert(flag == true);
         assert(stream.site_idx == site_idx);
         assert(id_ == stream.cli_idx);
+    }
+    void PrintSites() {
+        auto sites = accessible_sites_;
+        sort(sites.begin(), sites.end());
+        printf("client %ld: ", id_);
+        for (size_t s : sites) {
+            printf("%ld ", s);
+        }
+        printf("\n");
     }
 
   private:

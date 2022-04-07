@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cassert>
 #include <list>
 #include <string>
@@ -75,6 +76,15 @@ class Site {
         assert(flag == true);
         DecreaseBandwidth(stream.stream_size);
         streams_.push_back(stream);
+    }
+    void PrintClients() {
+        auto refs = ref_clients_;
+        sort(refs.begin(), refs.end());
+        printf("site %ld: ", id_);
+        for (size_t ref : refs) {
+            printf("%ld ", ref);
+        }
+        printf("\n");
     }
     const list<Stream> &GetStreams() const { return streams_; }
 
