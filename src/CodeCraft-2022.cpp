@@ -14,10 +14,6 @@
 
 using namespace std;
 
-using all_demand_t = vector<Demand>;
-
-bool is_valid = true;
-
 class SystemManager {
   public:
     SystemManager() = default;
@@ -43,15 +39,8 @@ class SystemManager {
     vector<Client> clients_;
     vector<Demand> demands_; // demands all mtimes
     vector<vector<int>> client_demands_;
-    long total_demand_{0};
-    long avg_demand_{0};
-    long max_demand_{0};
-    long mid_demand_{0};
-    long over_demand_all_{0};
-    int all_full_times_;
     unique_ptr<ResultSet> results_;
     vector<vector<int>> daily_full_site_indexes_;
-    vector<vector<int>> best_daily_full_site_idx;
 
     // 根据服务器的当前容量，以及被访问次数，动态计算流量分配ratio
     bool SetClientRatio(int i, const vector<int> &demand);
@@ -85,8 +74,9 @@ void SystemManager::Init() {
             sites_[site_idx].AddRefClient(i);
         }
     }
-    // 对服务器中的客户进行排序
+    // 对于每一个服务器
     std::for_each(sites_.begin(), sites_.end(), [this](Site &site) {
+        // 对服务器中的客户进行排序
         sort(site.GetRefClients().begin(), site.GetRefClients().end(),
              [this](int l, int r) {
                  auto GetAvailable = [this](int cli_idx) -> int {
@@ -123,17 +113,34 @@ void SystemManager::Init() {
         cli_idx_map[clients_[cli_idx].GetID()] = cli_idx;
         clients_[cli_idx].SetID(cli_idx);
     }
-    // 将client中的accessible sites根据引用次数排序，并且计算client的总需求量
+    // 对于每一个客户
     std::for_each(clients_.begin(), clients_.end(), [this](Client &cli) {
+        // 计算client的可以被提供的量
+        for (auto site_idx : cli.GetAccessibleSite()) {
+            auto &site = sites_[site_idx];
+            cli.AddAccessTotal(site.GetTotalBandwidth() / site.GetRefTimes());
+        }
+    });
+    std::for_each(clients_.begin(), clients_.end(), [this](Client &cli) {
+        // 将客户中的服务器进行排序
         sort(cli.GetAccessibleSite().begin(), cli.GetAccessibleSite().end(),
              [this](int l, int r) {
                  return sites_[l].GetRefTimes() < sites_[r].GetRefTimes();
              });
-
-        for (auto site : cli.GetAccessibleSite()) {
-            cli.AddAccessTotal(sites_[site].GetTotalBandwidth());
-        }
+        /* sort(cli.GetAccessibleSite().begin(), cli.GetAccessibleSite().end(), */
+        /*      [this](int l, int r) { */
+        /*          auto RefClientsNeed = [this](int site_idx) -> long { */
+        /*             long ret = 0; */
+        /*             auto &site = sites_[site_idx]; */
+        /*             for (size_t cli_idx : site.GetRefClients()) { */
+        /*                 ret += clients_[cli_idx].GetAccessTotal(); */
+        /*             } */
+        /*             return ret; */
+        /*          }; */
+        /*          return RefClientsNeed(l) > RefClientsNeed(r); */
+        /*      }); */
     });
+    // 排序后需要改变原来服务器和file_parser中对应的下标
     for (size_t cli_idx = 0; cli_idx < clients_.size(); cli_idx++) {
         clients_[cli_idx].ReInit();
     }
@@ -141,28 +148,18 @@ void SystemManager::Init() {
     for (auto &site : sites_) {
         site.ResetClientIndex(cli_idx_map);
     }
-    //
+    // 读取所有时刻的请求
     while (file_parser_.ParseDemand(clients_.size(), demands_))
         ;
     results_ =
         unique_ptr<ResultSet>(new ResultSet(sites_, clients_, base_cost_));
     /* results_->Reserve(demands_.size()); */
     results_->Resize(demands_.size());
-    // set variables
-    for (const auto &d : demands_) {
-        long cur_total = d.GetTotalDemand();
-        if (cur_total > max_demand_) {
-            max_demand_ = cur_total;
-        }
-        total_demand_ += cur_total;
-    }
-    avg_demand_ = total_demand_ / demands_.size();
-    // all_full_times_ = static_cast<int>(demands_.size() * 0.05 *
-    // sites_.size());
-    for (auto &site : sites_) {
-        site.SetMaxFullTimes(demands_.size() / 20 - 1);
-    }
 
+    // 根据所有时刻的请求初始化一些信息
+    for (auto &site : sites_) {
+        site.SetMaxFullTimes(demands_.size() / 20);
+    }
     for (size_t i = 0; i < demands_.size(); i++) {
         auto d = demands_[i];
         client_demands_.push_back(vector<int>(clients_.size(), 0));
