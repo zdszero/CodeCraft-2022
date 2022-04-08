@@ -375,7 +375,7 @@ void SystemManager::Schedule(Demand &d, int day) {
         client.Reset();
     }
     GreedyAllocate(d, day);
-    BaseAllocate(d);
+    /* BaseAllocate(d); */
     AverageAllocate(d);
 
     // update sites seperate value
