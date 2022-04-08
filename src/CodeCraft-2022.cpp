@@ -180,86 +180,130 @@ void SystemManager::PresetMaxSites() {
     std::vector<size_t> max_site_indexes;
     for (size_t i = 0; i < sites_.size(); i++) {
         max_site_indexes.push_back(i);
-        sites_[i].SetSeperateBandwidth(base_cost_);
+        sites_[i].SetSeperateBandwidth(base_cost_ );
     }
     // Sort by site capacity
-    sort(max_site_indexes.begin(), max_site_indexes.end(),
-         [this](size_t l, size_t r) {
-             return
-                 /* return sites_[l].GetTotalBandwidth() ==
-                    sites_[r].GetTotalBandwidth() ? */
-                 /*            (sites_[l].GetRefTimes() >
-                    sites_[r].GetRefTimes()) : */
-                 (sites_[l].GetTotalBandwidth() >
-                  sites_[r].GetTotalBandwidth());
+    auto sites_copy = sites_;
+    sort(max_site_indexes.begin(), max_site_indexes.end(),   //¼ÓÉÏ=ÓÐ±ä»¯
+         [&sites_copy](size_t l, size_t r) {
+//            if(sites_copy[l].GetTotalBandwidth() ==
+//               sites_copy[r].GetTotalBandwidth()) {
+//                return sites_copy[l].GetRefTimes() > sites_copy[r].GetRefTimes();
+//            }
+             return sites_copy[l].GetTotalBandwidth() >
+                    sites_copy[r].GetTotalBandwidth();
+//            if(sites_copy[l].GetRefTimes() == sites_copy[r].GetRefTimes()) {
+//                return sites_copy[l].GetTotalBandwidth() > sites_copy[r].GetTotalBandwidth();
+//            }
+//             return sites_copy[l].GetRefTimes() < sites_copy[r].GetRefTimes();
+         });
+    sort(sites_copy.begin(), sites_copy.end(),
+         [](const Site &l, const Site &r) {
+//            if(l.GetTotalBandwidth() == r.GetTotalBandwidth()) {
+//                return l.GetRefTimes() > r.GetRefTimes();
+//            }
+              return l.GetTotalBandwidth() > r.GetTotalBandwidth();
+//             if(l.GetRefTimes() == r.GetRefTimes()) {
+//                return l.GetTotalBandwidth()> r.GetTotalBandwidth();
+//            }
+//             return l.GetRefTimes() < r.GetRefTimes();
          });
 
-    // 按照site容量降序计算在哪一天打满
     auto client_demands_cpy = client_demands_;
+    auto demand_copy = demands_;
     daily_full_site_indexes_.resize(demands_.size(), vector<int>());
-    vector<bool> usable(sites_.size(), true);
-    for (size_t i = 0; i < sites_.size(); i++) {
-        if (sites_[i].GetRefTimes() == 0) {
-            usable[i] = false;
-        }
-    }
     for (size_t site_idx : max_site_indexes) {
-        if (not usable[site_idx]) {
-            continue;
-        }
+        auto site = sites_[site_idx];
         std::priority_queue<DailySite, std::vector<DailySite>, DailySiteCmp>
-            site_max_req;
+                site_max_req;
         for (size_t day = 0; day < client_demands_cpy.size(); day++) {
+
+            site.Reset();
             int cur_sum = 0;
-            auto &day_demand = client_demands_cpy[day];
-            for (size_t cli_idx : sites_[site_idx].GetRefClients()) {
-                /* int div_cnt = 0; */
-                /* for (size_t sidx: clients_[cli_idx].GetAccessibleSite()) { */
-                /*     if (usable[sidx]) { */
-                /*         div_cnt++; */
-                /*     } */
-                /* } */
-                /* if (div_cnt > 0) { */
-                /*     cur_sum += day_demand[cli_idx] / div_cnt; */
-                /* } */
-                cur_sum +=
-                    day_demand[cli_idx] / clients_[cli_idx].GetSiteCount();
-                /* cur_sum += day_demand[cli_idx]; */
-                //((sites_[site_index].GetTotalBandwidth() * 1.0) /
-                //(1.0 * clients_[cli_idex].GetAccessTotal()));
+            auto& need = demand_copy[day].GetStreamDemands();
+            vector<Stream> streams;
+            for (auto it = need.begin(); it != need.end(); it++) {
+                for (size_t cli_idx : sites_[site_idx].GetRefClients()) {
+                    streams.push_back(
+                            Stream{cli_idx, 0, it->first, it->second[cli_idx]});
+                }
+            }
+            for (auto &s : streams) {
+                if (s.stream_size / clients_[s.cli_idx].GetSiteCount() > site.GetRemainBandwidth()) {
+                    continue;
+                }
+                if (s.stream_size == 0) {
+                    continue;
+                }
+                cur_sum += s.stream_size / clients_[s.cli_idx].GetSiteCount();
+                site.DecreaseBandwidth(s.stream_size/ clients_[s.cli_idx].GetSiteCount());
+                        /*day_demand[cli_idx] * ((sites_[site_idx].GetTotalBandwidth()*1.0)/
+                         * (clients_[cli_idx].GetAccessTotal()*1.0));*/
             }
             if (cur_sum > 0) {
-                site_max_req.push({day, site_idx, cur_sum,
-                                   sites_[site_idx].GetTotalBandwidth()});
+                site_max_req.push(
+                        {day, site_idx,cur_sum ,
+                         sites_[site_idx].GetTotalBandwidth()});
             }
         }
-        // 找出每个服务器打得最满的%5天
         for (int j = 0; j < (int)(demands_.size() * 0.05); j++) {
             if (site_max_req.empty()) {
                 break;
             }
+
             DailySite daily_site = site_max_req.top();
             int day = daily_site.GetTime();
-            int remainBandwidth = daily_site.GetRemainBandwidth();
-            auto &day_demand = client_demands_cpy[day];
-            for (size_t cli_idx :
-                 sites_[daily_site.GetSiteIdx()].GetRefClients()) {
-                if (day_demand[cli_idx] == 0) {
-                    continue;
-                }
-                int allocated = std::min(remainBandwidth, day_demand[cli_idx]);
-                // assert(clients_[c].SetAllocationBySite(max_site_idx,
-                // allocated));
-                day_demand[cli_idx] -= allocated;
-                remainBandwidth -= allocated;
-                if (remainBandwidth == 0) {
-                    break;
+            auto site = sites_[daily_site.GetSiteIdx()];
+            site.Reset();
+            auto& need = demand_copy[day].GetStreamDemands();
+            vector<Stream> streams;
+            for (auto it = need.begin(); it != need.end(); it++) {
+                for (size_t cli_idx : site.GetRefClients()) {
+                    streams.push_back(
+                        Stream{cli_idx, 0, it->first, it->second[cli_idx]});
                 }
             }
+            sort(streams.begin(), streams.end(),
+                [](const Stream &l, const Stream &r) {
+                     return l.stream_size > r.stream_size;
+                });
+            for (auto &s : streams) {
+                if (s.stream_size > site.GetRemainBandwidth()) {
+                    continue;
+                }
+                if (s.stream_size == 0) {
+                    continue;
+                }
+
+                client_demands_cpy[day][s.cli_idx] -= s.stream_size;
+                need[s.stream_name][s.cli_idx] = 0;
+                site.DecreaseBandwidth(s.stream_size);
+            }
+//            for (size_t cli_idx : site.GetRefClients()) {
+//                using ittype = decltype(need.begin());
+//                vector<ittype> its;
+//                for (auto it = need.begin(); it != need.end(); it++) {
+//                    its.push_back(it);
+//                }
+//                sort(its.begin(), its.end(), [cli_idx](ittype l, ittype r) {
+//                    return l->second[cli_idx] > r->second[cli_idx];
+//                });
+//                for (auto it : its) {
+//                    /* for (auto it = need.begin(); it != need.end(); it++) { */
+//                    if (it->second[cli_idx] > site.GetRemainBandwidth()) {
+//                        continue;
+//                    }
+//                    if (it->second[cli_idx] == 0) {
+//                        continue;
+//                    }
+//                    /* site.DecreaseBandwidth(it->second[C]); */
+//                    client_demands_cpy[day][cli_idx] -= it->second[cli_idx];
+//                    it->second[cli_idx] = 0;
+//                }
+//            }
             daily_full_site_indexes_[day].push_back(daily_site.GetSiteIdx());
             site_max_req.pop();
         }
-        usable[site_idx] = false;
     }
 }
 
@@ -352,7 +396,6 @@ void SystemManager::GreedyAllocate(Demand &d, int day) {
             return;
         }
         auto &site = sites_[max_site_idx];
-        /*
         vector<Stream> streams;
         for (auto it = need.begin(); it != need.end(); it++) {
             for (size_t cli_idx : site.GetRefClients()) {
@@ -376,35 +419,34 @@ void SystemManager::GreedyAllocate(Demand &d, int day) {
             clients_[s.cli_idx].AddStreamBySiteIndex(max_site_idx, s);
             need[s.stream_name][s.cli_idx] = 0;
         }
-        */
-        for (size_t cli_idx : site.GetRefClients()) {
-            using ittype = decltype(need.begin());
-            vector<ittype> its;
-            for (auto it = need.begin(); it != need.end(); it++) {
-                its.push_back(it);
-            }
-            sort(its.begin(), its.end(), [cli_idx](ittype l, ittype r) {
-                return l->second[cli_idx] > r->second[cli_idx];
-            });
-            for (auto it : its) {
-                /* for (auto it = need.begin(); it != need.end(); it++) { */
-                if (it->second[cli_idx] > site.GetRemainBandwidth()) {
-                    continue;
-                }
-                if (it->second[cli_idx] == 0) {
-                    continue;
-                }
-                /* site.DecreaseBandwidth(it->second[C]); */
-                site.AddStream(Stream{cli_idx,
-                                      static_cast<size_t>(max_site_idx),
-                                      it->first, it->second[cli_idx]});
-                clients_[cli_idx].AddStreamBySiteIndex(
-                    max_site_idx,
-                    Stream{cli_idx, static_cast<size_t>(max_site_idx),
-                           it->first, it->second[cli_idx]});
-                it->second[cli_idx] = 0;
-            }
-        }
+        /* for (size_t cli_idx : site.GetRefClients()) { */
+        /*     using ittype = decltype(need.begin()); */
+        /*     vector<ittype> its; */
+        /*     for (auto it = need.begin(); it != need.end(); it++) { */
+        /*         its.push_back(it); */
+        /*     } */
+        /*     sort(its.begin(), its.end(), [cli_idx](ittype l, ittype r) { */
+        /*         return l->second[cli_idx] > r->second[cli_idx]; */
+        /*     }); */
+        /*     for (auto it : its) { */
+        /*         /1* for (auto it = need.begin(); it != need.end(); it++) { *1/ */
+        /*         if (it->second[cli_idx] > site.GetRemainBandwidth()) { */
+        /*             continue; */
+        /*         } */
+        /*         if (it->second[cli_idx] == 0) { */
+        /*             continue; */
+        /*         } */
+        /*         /1* site.DecreaseBandwidth(it->second[C]); *1/ */
+        /*         site.AddStream(Stream{cli_idx, */
+        /*                               static_cast<size_t>(max_site_idx), */
+        /*                               it->first, it->second[cli_idx]}); */
+        /*         clients_[cli_idx].AddStreamBySiteIndex( */
+        /*             max_site_idx, */
+        /*             Stream{cli_idx, static_cast<size_t>(max_site_idx), */
+        /*                    it->first, it->second[cli_idx]}); */
+        /*         it->second[cli_idx] = 0; */
+        /*     } */
+        /* } */
         site.IncFullTimes();
         site.SetFullThisTime();
     }
