@@ -127,7 +127,8 @@ void SystemManager::Init() {
              [this](int l, int r) {
                  return sites_[l].GetRefTimes() < sites_[r].GetRefTimes();
              });
-        /* sort(cli.GetAccessibleSite().begin(), cli.GetAccessibleSite().end(), */
+        /* sort(cli.GetAccessibleSite().begin(), cli.GetAccessibleSite().end(),
+         */
         /*      [this](int l, int r) { */
         /*          auto RefClientsNeed = [this](int site_idx) -> long { */
         /*             long ret = 0; */
@@ -451,59 +452,67 @@ void SystemManager::BaseAllocate(Demand &d) {
 
 void SystemManager::AverageAllocate(Demand &d) {
     auto &need = d.GetStreamDemands();
-    for (size_t cli_idx = 0; cli_idx < clients_.size(); cli_idx++) {
+    vector<Stream> streams;
+    for (auto it = need.begin(); it != need.end(); it++) {
+        for (size_t cli_idx = 0; cli_idx < it->second.size(); cli_idx++) {
+            streams.push_back(
+                Stream{cli_idx, 0, it->first, it->second[cli_idx]});
+        }
+    }
+    sort(streams.begin(), streams.end(), [](const Stream &l, const Stream &r) {
+        return l.stream_size > r.stream_size;
+    });
+    for (auto &str : streams) {
+        size_t cli_idx = str.cli_idx;
         auto &cli = clients_[cli_idx];
         auto &site_indexes = cli.GetAccessibleSite();
-        for (auto it = need.begin(); it != need.end(); it++) {
-            string stream_name = it->first;
-            auto &v = it->second;
-            if (v[cli_idx] == 0) {
+        string stream_name = str.stream_name;
+        if (str.stream_size == 0) {
+            continue;
+        }
+        bool flag = false;
+        int min_site = -1;
+        long min_grade = numeric_limits<long>::max();
+        long grade = 0;
+        int used = 0;
+        int sep = 0;
+        for (size_t site_idx : site_indexes) {
+            auto &site = sites_[site_idx];
+            if (site.GetRemainBandwidth() < str.stream_size) {
                 continue;
             }
-            bool flag = false;
-            int min_site = -1;
-            long min_grade = numeric_limits<long>::max();
-            long grade = 0;
-            int used = 0;
-            int sep = 0;
-            for (size_t site_idx : site_indexes) {
-                auto &site = sites_[site_idx];
-                if (site.GetRemainBandwidth() < v[cli_idx]) {
-                    continue;
-                }
-                used = site.GetAllocatedBandwidth() + v[cli_idx];
-                sep = site.GetSeperateBandwidth();
-                if (used <= sep) {
-                    min_site = site_idx;
-                    min_grade = -1;
-                    flag = true;
-                    break;
-                }
-                grade = /*pow((used - base_cost_), 2) * 1.0
-                        / (site.GetTotalBandwidth() * 1.0) + used;*/
-                    (used * used - sep * sep - 2 * base_cost_ * (used - sep)) /
-                        (site.GetTotalBandwidth()) +
-                    (used - sep);
-                /* printf("site: %ld, grade: %ld\n", site_idx, grade); */
-                if (grade <= min_grade) {
-                    min_site = site_idx;
-                    min_grade = grade;
-                    flag = true;
-                }
+            used = site.GetAllocatedBandwidth() + str.stream_size;
+            sep = site.GetSeperateBandwidth();
+            if (used <= sep) {
+                min_site = site_idx;
+                min_grade = -1;
+                flag = true;
+                break;
             }
-            /* printf("min site: %d, min grade = %ld\n", min_site, min_grade);
-             */
-            auto &site = sites_[min_site];
-            /* site.DecreaseBandwidth(v[C]); */
-            site.AddStream(Stream{cli_idx, static_cast<size_t>(min_site),
-                                  stream_name, v[cli_idx]});
-            site.ResetSeperateBandwidth();
-            cli.AddStreamBySiteIndex(
-                min_site, Stream{cli_idx, static_cast<size_t>(min_site),
-                                 stream_name, v[cli_idx]});
-            v[cli_idx] = 0;
-            assert(flag == true);
+            grade = /*pow((used - base_cost_), 2) * 1.0
+                    / (site.GetTotalBandwidth() * 1.0) + used;*/
+                (used * used - sep * sep - 2 * base_cost_ * (used - sep)) /
+                    (site.GetTotalBandwidth()) +
+                (used - sep);
+            /* printf("site: %ld, grade: %ld\n", site_idx, grade); */
+            if (grade <= min_grade) {
+                min_site = site_idx;
+                min_grade = grade;
+                flag = true;
+            }
         }
+        /* printf("min site: %d, min grade = %ld\n", min_site, min_grade);
+         */
+        auto &site = sites_[min_site];
+        /* site.DecreaseBandwidth(v[C]); */
+        site.AddStream(Stream{cli_idx, static_cast<size_t>(min_site),
+                              stream_name, str.stream_size});
+        site.ResetSeperateBandwidth();
+        cli.AddStreamBySiteIndex(min_site,
+                                 Stream{cli_idx, static_cast<size_t>(min_site),
+                                        stream_name, str.stream_size});
+        /* v[cli_idx] = 0; */
+        assert(flag == true);
     }
 }
 
