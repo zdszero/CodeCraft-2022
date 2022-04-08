@@ -18,8 +18,11 @@ struct AllocationTable {
     // from site no to site index
     unordered_map<size_t, size_t> site_map;
 
-    const list<Stream> &GetList(size_t n) { return tbl[n]; }
     void Add(size_t n, const Stream &p) { tbl[n].push_back(p); }
+    list<Stream> &GetList(size_t site_idx) {
+        size_t S = site_map[site_idx];
+        return tbl[S];
+    }
     void MoveStream(const Stream &stream, size_t from, size_t to) {
         bool flag = false;
         size_t from_idx = site_map[from];

@@ -92,22 +92,22 @@ void SystemManager::Init() {
              });
     });
     // 对客户进行排序
-    /* std::sort(clients_.begin(), clients_.end(), */
-    /*           [](const Client &l, const Client &r) { */
-    /*               return l.GetSiteCount() < r.GetSiteCount(); */
-    /*           }); */
     std::sort(clients_.begin(), clients_.end(),
-              [this](const Client &l, const Client &r) {
-                  auto GetAvailable = [this](const Client &cli) -> int {
-                      int ret = 0;
-                      for (size_t site_idx : cli.GetAccessibleSite()) {
-                          ret += sites_[site_idx].GetTotalBandwidth() /
-                                 sites_[site_idx].GetRefTimes();
-                      }
-                      return ret;
-                  };
-                  return GetAvailable(l) < GetAvailable(r);
+              [](const Client &l, const Client &r) {
+                  return l.GetSiteCount() < r.GetSiteCount();
               });
+    /* std::sort(clients_.begin(), clients_.end(), */
+    /*           [this](const Client &l, const Client &r) { */
+    /*               auto GetAvailable = [this](const Client &cli) -> int { */
+    /*                   int ret = 0; */
+    /*                   for (size_t site_idx : cli.GetAccessibleSite()) { */
+    /*                       ret += sites_[site_idx].GetTotalBandwidth() / */
+    /*                              sites_[site_idx].GetRefTimes(); */
+    /*                   } */
+    /*                   return ret; */
+    /*               }; */
+    /*               return GetAvailable(l) < GetAvailable(r); */
+    /*           }); */
     unordered_map<size_t, size_t> cli_idx_map;
     for (size_t cli_idx = 0; cli_idx < clients_.size(); cli_idx++) {
         cli_idx_map[clients_[cli_idx].GetID()] = cli_idx;
@@ -306,6 +306,8 @@ void SystemManager::Process() {
         results_->Migrate();
     }
     results_->ExpelTop5();
+    /* results_->UpdateTop5(); */
+    /* results_->ExpelTop5(); */
     /* for (auto &site : sites_) { */
     /*     site.PrintClients(); */
     /* } */
