@@ -53,7 +53,7 @@ class Result {
             auto &cli_ref = cli_refs[it->cli_idx];
             int To = -1;
             int min_free = numeric_limits<int>::max();
-            /* int max_dec_cost = 0; */
+            //  int max_dec_cost = 0;
             // choose To server to move
             for (size_t candidate : cli_ref) {
                 if (candidate == from) {
@@ -316,13 +316,15 @@ inline void ResultSet::AdjustTop5() {
     for (size_t site_idx = 0; site_idx < site_top5_days_.size(); site_idx++) {
         for (auto &p : site_top5_days_[site_idx]) {
             size_t day = p.second;
-            days_result_[day].ExpelTop5(site_idx, base_, seps_, cli_ref_sites_idx_);
+            days_result_[day].ExpelTop5(site_idx, base_, seps_,
+                                        cli_ref_sites_idx_);
         }
         ComputeSomeSeps(ComputeJob::GET_5, site_idx);
         for (auto &p : site_top5_days_[site_idx]) {
             size_t day = p.second;
-            days_result_[day].UpdateTop5(site_idx, base_, seps_, cli_ref_sites_idx_,
-                                         site_refs_, sites_caps_);
+            days_result_[day].UpdateTop5(site_idx, base_, seps_,
+                                         cli_ref_sites_idx_, site_refs_,
+                                         sites_caps_);
         }
     }
 }
@@ -389,12 +391,12 @@ inline void ResultSet::ComputeAllSeps(ComputeJob job) {
             if (cnt >= arr.size() - sep_idx) {
                 continue;
             }
-            /* printf("site idx %ld: ", site_idx); */
+            //  printf("site idx %ld: ", site_idx);
             for (size_t i = sep_idx + 1; i < arr.size(); i++) {
-                /* printf("<%d, %ld> ", arr[i].first, arr[i].second); */
+                //  printf("<%d, %ld> ", arr[i].first, arr[i].second);
                 site_top5_days_[site_idx].push_back(arr[i]);
             }
-            /* printf("\n"); */
+            //  printf("\n");
         }
     }
 }
@@ -439,12 +441,12 @@ inline void ResultSet::ComputeSomeSeps(ComputeJob job, size_t site_idx) {
         if (is_always_empty_[site_idx]) {
             return;
         }
-        /* printf("site idx %ld: ", site_idx); */
+        //  printf("site idx %ld: ", site_idx);
         for (size_t i = sep_idx + 1; i < arr.size(); i++) {
-            /* printf("<%d, %ld> ", arr[i].first, arr[i].second); */
+            //  printf("<%d, %ld> ", arr[i].first, arr[i].second);
             site_top5_days_[site_idx].push_back(arr[i]);
         }
-        /* printf("\n"); */
+        //  printf("\n");
     }
 }
 
