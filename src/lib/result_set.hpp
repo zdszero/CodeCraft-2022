@@ -125,6 +125,9 @@ class Result {
                 if (site_loads_[from] <= base) {
                     continue;
                 }
+                if (site_loads_[from] > seps[from].first) {
+                    continue;
+                }
                 auto &streams = cli_tbls_[cli_idx].GetList(from);
                 for (auto it = streams.begin(); it != streams.end();) {
                     /* printf("site idx: %ld, from: %ld\n", str.site_idx, from);
@@ -194,7 +197,7 @@ class ResultSet {
         }
     }
     void Migrate();
-    void ExpelTop5();
+    void AdjustTop5();
     void Reserve(size_t n) { days_result_.reserve(n); }
     void Resize(size_t n) { days_result_.resize(n); }
     void AddResult(Result &&day_res) { days_result_.push_back(day_res); }
@@ -308,7 +311,7 @@ inline void ResultSet::Migrate() {
     }
 }
 
-inline void ResultSet::ExpelTop5() {
+inline void ResultSet::AdjustTop5() {
     ComputeAllSeps(ComputeJob::GET_5);
     for (size_t site_idx = 0; site_idx < site_top5_days_.size(); site_idx++) {
         for (auto &p : site_top5_days_[site_idx]) {
@@ -373,6 +376,17 @@ inline void ResultSet::ComputeAllSeps(ComputeJob job) {
             }
         } else if (job == ComputeJob::GET_5) {
             if (is_always_empty_[site_idx]) {
+                continue;
+            }
+            int cnt = 0;
+            for (int i = static_cast<int>(sep_idx); i >= 0; i--) {
+                if (arr[sep_idx].first - arr[i].first < 1500) {
+                    cnt++;
+                } else {
+                    break;
+                }
+            }
+            if (cnt >= arr.size() - sep_idx) {
                 continue;
             }
             /* printf("site idx %ld: ", site_idx); */
