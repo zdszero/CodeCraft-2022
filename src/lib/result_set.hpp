@@ -115,6 +115,39 @@ public:
         return cur_load;
 
     }
+
+    int ExpelTop5Test2(size_t from, int base, vector<pair<int, size_t>> &seps, vector<vector<size_t>> &cli_refs) {
+        int cur_load = site_loads_[from];
+        auto site_load_cpy = site_loads_;
+        for (auto it = site_streams_[from].begin(); it != site_streams_[from].end();) {
+            assert(it->site_idx == from);
+// which client is the stream from
+            auto &cli_ref = cli_refs[it->cli_idx];
+            int to = -1;
+// choose To server to move
+            for (size_t candidate : cli_ref) {
+                if (candidate == from) {
+                    continue;
+                }
+                if (site_load_cpy[candidate] + it->stream_size <= seps[candidate].first) {
+                    to = candidate;
+                    break;
+                }
+            }
+// if all other site's load is greater
+            if (to == -1) {
+                it++;
+                continue;
+            }
+            cur_load -= it->stream_size;
+            site_load_cpy[to] += it->stream_size;
+            it++;
+            if (cur_load <= base) {
+                break;
+            }
+        }
+        return cur_load;
+    }
     void ExpelTop5(size_t from, int base, vector<pair<int, size_t>> &seps,
                    vector<vector<size_t>> &cli_refs) {
         for (auto it = site_streams_[from].begin();
@@ -364,7 +397,7 @@ inline void ResultSet::AdjustTop5() {
         for (auto &p : site_top5_days_[site_idx]) {
             size_t day = p.second;
             if(days_result_[day].ExpelTop5Test(site_idx, base_,
-                                               seps_, cli_ref_sites_idx_) >= seps_[site_idx].first) {
+                                               seps_, cli_ref_sites_idx_) > seps_[site_idx].first) {
                 continue;
             }
             days_result_[day].ExpelTop5(site_idx, base_, seps_, cli_ref_sites_idx_);
