@@ -41,7 +41,7 @@ private:
     vector<vector<int>> client_demands_;
     unique_ptr<ResultSet> results_;
     vector<vector<int>> daily_full_site_indexes_;
-    
+
     // 对于每一个时间戳的请求进行调度
     void Schedule(Demand &d, int day);
     // 贪心将可以分配满的site先分配满
@@ -349,7 +349,7 @@ void SystemManager::Process() {
             auto &d = demands_copy[day_idx];
             Schedule(d, day_idx);
         }
-        for (size_t times = 1; times <= 120; times++) {
+        for (size_t times = 1; times <= 300; times++) {
             results_->Migrate();
             if(times % 20 == 0) {
                 results_->AdjustTop5();
