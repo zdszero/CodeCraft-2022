@@ -18,11 +18,11 @@ class ResultSet;
 class Result {
     friend class ResultSet;
 
-  public:
+public:
     Result() = default;
     explicit Result(size_t day, const vector<Client> &clients,
                     const vector<Site> &sites)
-        : day_(day) {
+            : day_(day) {
         cli_tbls_.reserve(clients.size());
         for (const auto &cli : clients) {
             cli_tbls_.push_back(cli.GetAllocationTable());
@@ -53,7 +53,7 @@ class Result {
             auto &cli_ref = cli_refs[it->cli_idx];
             int To = -1;
             int min_free = numeric_limits<int>::max();
-            //  int max_dec_cost = 0;
+            /* int max_dec_cost = 0; */
             // choose To server to move
             for (size_t candidate : cli_ref) {
                 if (candidate == from) {
@@ -82,7 +82,39 @@ class Result {
         }
         return cur_load;
     }
+    int ExpelTop5Test(size_t from, int base, vector<pair<int, size_t>> &seps,
+                      vector<vector<size_t>> &cli_refs) {
+        int cur_load = site_loads_[from];
+        for (auto it = site_streams_[from].begin();
+             it != site_streams_[from].end();) {
+            assert(it->site_idx == from);
+            // which client is the stream from
+            auto &cli_ref = cli_refs[it->cli_idx];
+            int to = -1;
+            // choose To server to move
+            for (size_t candidate : cli_ref) {
+                if (candidate == from) {
+                    continue;
+                }
+                if (site_loads_[candidate] + it->stream_size <=
+                    seps[candidate].first) {
+                    to = candidate;
+                    break;
+                }
+            }
+            // if all other site's load is greater
+            if (to == -1) {
+                it++;
+                continue;
+            }
+            cur_load -= it->stream_size;
+            if (cur_load <= base) {
+                break;
+            }
+        }
+        return cur_load;
 
+    }
     void ExpelTop5(size_t from, int base, vector<pair<int, size_t>> &seps,
                    vector<vector<size_t>> &cli_refs) {
         for (auto it = site_streams_[from].begin();
@@ -96,7 +128,7 @@ class Result {
                 if (candidate == from) {
                     continue;
                 }
-                if (site_loads_[candidate] + it->stream_size <
+                if (site_loads_[candidate] + it->stream_size <=
                     seps[candidate].first) {
                     to = candidate;
                     break;
@@ -108,7 +140,7 @@ class Result {
                 continue;
             }
             it = MoveStream(it, from, to);
-            if (site_loads_[from] <= base) {
+            if (site_loads_[from] <= base /*|| site_loads_[from] <= seps[from].first * 0.2*/) {
                 break;
             }
         }
@@ -154,7 +186,7 @@ class Result {
                 }
             }
         }
-    End:;
+        End:;
     }
 
     list<Stream>::iterator MoveStream(list<Stream>::iterator &it, size_t from,
@@ -168,7 +200,7 @@ class Result {
         return site_streams_[from].erase(it);
     }
 
-  private:
+private:
     size_t day_;
     vector<AllocationTable> cli_tbls_;
     vector<int> site_loads_;
@@ -181,10 +213,10 @@ class ResultSet {
     using ResultSetIter = vector<Result>::iterator;
     enum class ComputeJob { GET_GRADE, GET_95, GET_5 };
 
-  public:
+public:
     ResultSet() = default;
     ResultSet(const vector<Site> &sites, vector<Client> &clis, int base)
-        : base_(base) {
+            : base_(base) {
         sites_caps_.reserve(sites.size());
         site_refs_.reserve(sites.size());
         for (const auto &site : sites) {
@@ -210,7 +242,7 @@ class ResultSet {
 
     void PrintLoads();
 
-  private:
+private:
     vector<Result> days_result_;
     vector<bool> is_always_empty_;
     // 没一台服务器，当前的<95分位值，对应的天>
@@ -222,6 +254,7 @@ class ResultSet {
     vector<list<pair<int, size_t>>> site_migrate_days_;
     vector<list<pair<int, size_t>>> site_top5_days_;
     vector<vector<size_t>> cli_ref_sites_idx_;
+    vector<int> site_cnt;
     int base_{0};
 
     void ComputeAllSeps(ComputeJob job);
@@ -251,7 +284,7 @@ inline int ResultSet::GetGrade() {
             grade += base_;
         } else {
             grade += static_cast<int>(pow(1.0 * (seps_[S].first - base_), 2) /
-                                          sites_caps_[S] +
+                                      sites_caps_[S] +
                                       seps_[S].first);
         }
     }
@@ -281,9 +314,13 @@ inline void ResultSet::Migrate() {
         };
         return getval(l) > getval(r);
     });
+//    sort(site_indexes.begin(), site_indexes.end(), [this](size_t l, size_t r) {
+//        return sites_caps_[l] < sites_caps_[r];
+//    });
+
     for (auto site_idx : site_indexes) {
         auto &site_mig_day = site_migrate_days_[site_idx];
-        int base = base_; //
+        int base = base_; /*max(base_, (int)(seps_[site_idx].first * 0.5)); *///
         int cur_used = 0;
         int sep_day = -1;
         bool isSep = true;
@@ -293,8 +330,8 @@ inline void ResultSet::Migrate() {
                 break;
             }
             cur_used =
-                days_result_[day].Migrate(site_idx, seps_, cli_ref_sites_idx_,
-                                          base, base_, sites_caps_, day, isSep);
+                    days_result_[day].Migrate(site_idx, seps_, cli_ref_sites_idx_,
+                                              base, base_, sites_caps_, day, isSep);
             isSep = false;
             if (cur_used >= base) {
                 base = cur_used;
@@ -313,21 +350,35 @@ inline void ResultSet::Migrate() {
 
 inline void ResultSet::AdjustTop5() {
     ComputeAllSeps(ComputeJob::GET_5);
-    for (size_t site_idx = 0; site_idx < site_top5_days_.size(); site_idx++) {
+    vector<int> sites_idx(site_top5_days_.size(), 0);
+    for(int i = 0; i < site_top5_days_.size(); i++) {
+        sites_idx.push_back(i);
+    }
+    sort(sites_idx.begin(), sites_idx.end(), [this](size_t l, size_t r) {
+        return site_cnt[l] <site_cnt[r];
+    });
+    for(int i = 0; i < sites_idx.size() /2; i++) {
+        int site_idx = sites_idx[i];
+//    }
+//    for (size_t site_idx = 0; site_idx < site_top5_days_.size(); site_idx++) {
         for (auto &p : site_top5_days_[site_idx]) {
             size_t day = p.second;
-            days_result_[day].ExpelTop5(site_idx, base_, seps_,
-                                        cli_ref_sites_idx_);
+            if(days_result_[day].ExpelTop5Test(site_idx, base_,
+                                               seps_, cli_ref_sites_idx_) >= seps_[site_idx].first) {
+                continue;
+            }
+            days_result_[day].ExpelTop5(site_idx, base_, seps_, cli_ref_sites_idx_);
+
         }
         ComputeSomeSeps(ComputeJob::GET_5, site_idx);
         for (auto &p : site_top5_days_[site_idx]) {
             size_t day = p.second;
-            days_result_[day].UpdateTop5(site_idx, base_, seps_,
-                                         cli_ref_sites_idx_, site_refs_,
-                                         sites_caps_);
+            days_result_[day].UpdateTop5(site_idx, base_, seps_, cli_ref_sites_idx_,
+                                         site_refs_, sites_caps_);
         }
     }
 }
+
 
 inline void ResultSet::ComputeAllSeps(ComputeJob job) {
     assert(not days_result_.empty());
@@ -345,6 +396,7 @@ inline void ResultSet::ComputeAllSeps(ComputeJob job) {
         }
     }
     is_always_empty_.resize(site_count, false);
+    site_cnt = vector<int>(site_count, 0);
     for (size_t site_idx = 0; site_idx < site_count; site_idx++) {
         // load, day
         vector<pair<int, size_t>> arr;
@@ -363,6 +415,7 @@ inline void ResultSet::ComputeAllSeps(ComputeJob job) {
             is_always_empty_[site_idx] = true;
         }
         // get migrate days
+
         if (job == ComputeJob::GET_95) {
             if (is_always_empty_[site_idx]) {
                 continue;
@@ -382,24 +435,26 @@ inline void ResultSet::ComputeAllSeps(ComputeJob job) {
             }
             int cnt = 0;
             for (int i = static_cast<int>(sep_idx); i >= 0; i--) {
-                if (arr[sep_idx].first - arr[i].first < 1500) {
+                if (arr[sep_idx].first - arr[i].first < base_ / 2) {
                     cnt++;
                 } else {
                     break;
                 }
             }
-            if (cnt >= arr.size() - sep_idx) {
-                continue;
-            }
-            //  printf("site idx %ld: ", site_idx);
+            site_cnt[site_idx] = cnt;
+//            if (cnt >= arr.size() - sep_idx) {
+//                continue;
+//            }
+            /* printf("site idx %ld: ", site_idx); */
             for (size_t i = sep_idx + 1; i < arr.size(); i++) {
-                //  printf("<%d, %ld> ", arr[i].first, arr[i].second);
+                /* printf("<%d, %ld> ", arr[i].first, arr[i].second); */
                 site_top5_days_[site_idx].push_back(arr[i]);
             }
-            //  printf("\n");
+            /* printf("\n"); */
         }
     }
 }
+
 
 inline void ResultSet::ComputeSomeSeps(ComputeJob job, size_t site_idx) {
     if (job == ComputeJob::GET_95) {
@@ -441,12 +496,12 @@ inline void ResultSet::ComputeSomeSeps(ComputeJob job, size_t site_idx) {
         if (is_always_empty_[site_idx]) {
             return;
         }
-        //  printf("site idx %ld: ", site_idx);
+        /* printf("site idx %ld: ", site_idx); */
         for (size_t i = sep_idx + 1; i < arr.size(); i++) {
-            //  printf("<%d, %ld> ", arr[i].first, arr[i].second);
+            /* printf("<%d, %ld> ", arr[i].first, arr[i].second); */
             site_top5_days_[site_idx].push_back(arr[i]);
         }
-        //  printf("\n");
+        /* printf("\n"); */
     }
 }
 
