@@ -6,6 +6,7 @@
 #include <set>
 #include <string>
 #include <vector>
+#include <array>
 
 #include "client.hpp"
 #include "site.hpp"
