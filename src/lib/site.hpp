@@ -19,6 +19,7 @@ class Site {
     Site(size_t id, const string &name, int bandwidth)
         : id_(id), name_(name), total_bandwidth_(bandwidth),
           remain_bandwidth(bandwidth) {}
+    size_t GetID() { return id_; }
     const char *GetName() const { return name_.c_str(); }
     int GetRefTimes() const { return ref_times_; }
     int GetFullTimes() const { return cur_full_times_; }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <algorithm>
 #include <cmath>
 #include <list>
@@ -262,6 +263,11 @@ public:
             cli_ref_sites_idx_.push_back(cli.GetAccessibleSite());
         }
     }
+    void Set90(array<size_t, 10> &arr) {
+        for (size_t idx : arr) {
+            is_90_.insert(idx);
+        }
+    }
     void Migrate();
     void AdjustTop5();
     void Reserve(size_t n) { days_result_.reserve(n); }
@@ -290,6 +296,7 @@ private:
     vector<vector<size_t>> cli_ref_sites_idx_;
     vector<int> site_cnt;
     int base_{0};
+    set<size_t> is_90_;
 
     void ComputeAllSeps(ComputeJob job);
     void ComputeSomeSeps(ComputeJob job, size_t site_idx);
@@ -314,13 +321,15 @@ inline int ResultSet::GetGrade() {
             continue;
         }
         total += seps_[S].first;
+        int add_grade;
         if (seps_[S].first <= base_) {
-            grade += base_;
+            add_grade = base_;
         } else {
-            grade += static_cast<int>(pow(1.0 * (seps_[S].first - base_), 2) /
+            add_grade = static_cast<int>(pow(1.0 * (seps_[S].first - base_), 2) /
                                       sites_caps_[S] +
                                       seps_[S].first);
         }
+        grade += add_grade;
     }
     printf("total:%d\n", total);
     return grade;
@@ -444,6 +453,9 @@ inline void ResultSet::ComputeAllSeps(ComputeJob job) {
                  return l.first < r.first;
              });
         size_t sep_idx = ceil(arr.size() * 0.95) - 1;
+        if (is_90_.find(site_idx) != is_90_.end()) {
+            sep_idx = ceil(arr.size() * 0.9) - 1;
+        }
         seps_[site_idx] = arr[sep_idx];
         if (arr.back().first == 0) {
             is_always_empty_[site_idx] = true;
@@ -508,6 +520,9 @@ inline void ResultSet::ComputeSomeSeps(ComputeJob job, size_t site_idx) {
              return l.first < r.first;
          });
     size_t sep_idx = ceil(arr.size() * 0.95) - 1;
+    if (is_90_.find(site_idx) != is_90_.end()) {
+        sep_idx = ceil(arr.size() * 0.9) - 1;
+    }
     seps_[site_idx] = arr[sep_idx];
     if (arr.back().first == 0) {
         is_always_empty_[site_idx] = true;

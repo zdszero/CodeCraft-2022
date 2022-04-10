@@ -42,6 +42,7 @@ private:
     vector<vector<int>> client_demands_;
     unique_ptr<ResultSet> results_;
     vector<vector<int>> daily_full_site_indexes_;
+    array<size_t, 10> site_90_;
 
     // 对于每一个时间戳的请求进行调度
     void Schedule(Demand &d, int day);
@@ -196,6 +197,11 @@ void SystemManager::PresetMaxSites() {
 //             return sites_copy[l].GetRefTimes() < sites_copy[r].GetRefTimes();
          });
 
+    for (size_t i = 0; i < 10; i++) {
+        site_90_[i] = max_site_indexes[i];
+    }
+    results_->Set90(site_90_);
+
     auto client_demands_cpy = client_demands_;
     auto demand_copy = demands_;
     daily_full_site_indexes_.resize(demands_.size(), vector<int>());
@@ -204,7 +210,8 @@ void SystemManager::PresetMaxSites() {
     for (size_t cli_idx = 0; cli_idx < clients_.size(); cli_idx++) {
         cli_cnt.push_back(vector<size_t>(demands_.size(), clients_[cli_idx].GetSiteCount()));
     }
-    for (size_t site_idx : max_site_indexes) {
+    for (size_t i = 0; i < max_site_indexes.size(); i++) {
+        size_t site_idx = max_site_indexes[i];
         auto site = sites_[site_idx];
         std::priority_queue<DailySite, std::vector<DailySite>, DailySiteCmp>
                 site_max_req;
@@ -238,7 +245,11 @@ void SystemManager::PresetMaxSites() {
                          sites_[site_idx].GetTotalBandwidth()});
             }
         }
-        for (int j = 0; j < (int)(demands_.size() * 0.05); j++) {
+        int times = static_cast<int>(demands_.size() * 0.05);
+        if (i < 10) {
+            times = static_cast<int>(demands_.size() * 0.1) - 1;
+        }
+        for (int j = 0; j < times; j++) {
             if (site_max_req.empty()) {
                 break;
             }
@@ -346,7 +357,7 @@ void SystemManager::Process() {
             auto &d = demands_copy[day_idx];
             Schedule(d, day_idx);
         }
-        for (size_t times = 1; times <= 300; times++) {
+        for (size_t times = 1; times <= 40; times++) {
             results_->Migrate();
             if(times % 20 == 0) {
                 results_->AdjustTop5();
@@ -365,6 +376,15 @@ void SystemManager::Process() {
         printf("grade = %d\n", grade);
     }
     printf("best grade = %d\n", best_grade);
+    for (size_t i = 0; i < 10; i++) {
+        if (i != 0) {
+            fprintf(output_fp_, ",");
+        }
+        assert(sites_[site_90_[i]].GetID() == site_90_[i]);
+        fprintf(output_fp_, "%s", sites_[site_90_[i]].GetName());
+    }
+    fprintf(output_fp_, "\n");
+
     for (const auto &day_res : best_result) {
         WriteSchedule(day_res);
     }
