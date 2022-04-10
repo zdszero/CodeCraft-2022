@@ -185,10 +185,10 @@ void SystemManager::PresetMaxSites() {
     // Sort by site capacity
     sort(max_site_indexes.begin(), max_site_indexes.end(),
          [this](size_t l, size_t r) {
-//            if(sites_copy[l].GetTotalBandwidth() ==
-//               sites_copy[r].GetTotalBandwidth()) {
-//                return sites_copy[l].GetRefTimes() > sites_copy[r].GetRefTimes();
-//            }
+           if (sites_[l].GetTotalBandwidth() ==
+              sites_[r].GetTotalBandwidth()) {
+               return sites_[l].GetRefTimes() > sites_[r].GetRefTimes();
+           }
              return sites_[l].GetTotalBandwidth() >
                     sites_[r].GetTotalBandwidth();
 //            if(sites_copy[l].GetRefTimes() == sites_copy[r].GetRefTimes()) {
@@ -267,8 +267,11 @@ void SystemManager::PresetMaxSites() {
                 }
             }
             sort(streams.begin(), streams.end(),
-                 [](const Stream &l, const Stream &r) {
-                     return l.stream_size > r.stream_size;
+                 [this](const Stream &l, const Stream &r) {
+                    if (l.stream_size == r.stream_size) {
+                        return clients_[l.cli_idx].GetSiteCount() < clients_[r.cli_idx].GetSiteCount();
+                    }
+                    return l.stream_size > r.stream_size;
                  });
             for (auto &s : streams) {
                 if (s.stream_size > site.GetRemainBandwidth()) {
@@ -357,9 +360,9 @@ void SystemManager::Process() {
             auto &d = demands_copy[day_idx];
             Schedule(d, day_idx);
         }
-        for (size_t times = 1; times <= 40; times++) {
+        for (size_t times = 1; times <= 300; times++) {
             results_->Migrate();
-            if(times % 20 == 0) {
+            if(times % 10 == 0) {
                 results_->AdjustTop5();
             }
         }
@@ -437,7 +440,10 @@ void SystemManager::GreedyAllocate(Demand &d, int day) {
             }
         }
         sort(streams.begin(), streams.end(),
-             [](const Stream &l, const Stream &r) {
+             [this](const Stream &l, const Stream &r) {
+                if (l.stream_size == r.stream_size) {
+                    return clients_[l.cli_idx].GetSiteCount() < clients_[r.cli_idx].GetSiteCount();
+                }
                  return l.stream_size > r.stream_size;
              });
         for (auto &s : streams) {
@@ -534,7 +540,10 @@ void SystemManager::AverageAllocate(Demand &d) {
                     Stream{cli_idx, 0, it->first, it->second[cli_idx]});
         }
     }
-    sort(streams.begin(), streams.end(), [](const Stream &l, const Stream &r) {
+    sort(streams.begin(), streams.end(), [this](const Stream &l, const Stream &r) {
+        if (l.stream_size == r.stream_size) {
+            return clients_[l.cli_idx].GetSiteCount() < clients_[r.cli_idx].GetSiteCount();
+        }
         return l.stream_size > r.stream_size;
     });
     for (auto &str : streams) {
