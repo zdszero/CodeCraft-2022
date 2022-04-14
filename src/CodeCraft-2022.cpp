@@ -11,6 +11,7 @@
 #include "daily_site.hpp"
 #include "file_parser.hpp"
 #include "result_set.hpp"
+#include "center_result_set.hpp"
 
 using namespace std;
 
@@ -40,6 +41,7 @@ private:
     vector<Demand> demands_; // demands all mtimes
     vector<vector<int>> client_demands_;
     unique_ptr<ResultSet> results_;
+    CenterResultSet center_results_;
     vector<vector<int>> daily_full_site_indexes_;
 
     // 对于每一个时间戳的请求进行调度
@@ -154,6 +156,7 @@ void SystemManager::Init() {
             unique_ptr<ResultSet>(new ResultSet(sites_, clients_, base_cost_));
     /* results_->Reserve(demands_.size()); */
     results_->Resize(demands_.size());
+    center_results_.Resize(demands_.size());
 
     // 根据所有时刻的请求初始化一些信息
     for (auto &site : sites_) {
@@ -340,35 +343,16 @@ void SystemManager::Process() {
     //             return demands_copy[l].GetTotalDemand() >
     //                     demands_copy[r].GetTotalDemand();
     //         });
-    int best_grade = numeric_limits<int>::max();
-    ResultSet best_result;
-    for(int kk = 0; kk < 1; kk++) {
-        auto demands_copy = demands_;
-        for (size_t day_idx: days) {
-            /* for (size_t day_idx = 0; day_idx < demands_.size(); day_idx++) { */
-            auto &d = demands_copy[day_idx];
-            Schedule(d, day_idx);
-        }
-        for (size_t times = 1; times <= 300; times++) {
-            results_->Migrate();
-            if(times % 20 == 0) {
-                results_->AdjustTop5();
-            }
-        }
-
-
-        int grade = results_->GetGrade();
-        if(grade < best_grade) {
-            best_grade = grade;
-            best_result = *results_.get();
-            for (auto &site : sites_) {
-                site.SetSeperateBandwidth(max(base_cost_, site.GetSeperateBandwidth()));
-            }
-        }
-        printf("grade = %d\n", grade);
+    for (size_t day_idx: days) {
+        /* for (size_t day_idx = 0; day_idx < demands_.size(); day_idx++) { */
+        auto &d = demands_[day_idx];
+        Schedule(d, day_idx);
     }
-    printf("best grade = %d\n", best_grade);
-    for (const auto &day_res : best_result) {
+    int grade = results_->GetGrade();
+    printf("grade = %d\n", grade);
+    int ctr_grd = center_results_.GetGrade();
+    printf("center grade = %d\n", ctr_grd);
+    for (const auto &day_res : *results_) {
         WriteSchedule(day_res);
     }
     /* results_->UpdateTop5(); */
@@ -400,6 +384,7 @@ void SystemManager::Schedule(Demand &d, int day) {
     }
     /* results_->AddResult(Result(clients_, sites_)); */
     results_->SetResult(day, Result(day, clients_, sites_));
+    center_results_.SetResult(day, sites_);
 }
 
 void SystemManager::GreedyAllocate(Demand &d, int day) {

@@ -13,6 +13,7 @@ using namespace std;
 
 class Site {
     friend class FileParser;
+    friend class CenterResult;
 
   public:
     Site() = default;
@@ -44,12 +45,7 @@ class Site {
         remain_bandwidth = total_bandwidth_;
         full_this_time_ = false;
         streams_.clear();
-    }
-    void Restart() {
-        remain_bandwidth = total_bandwidth_;
-        full_this_time_ = false;
-        // seperate_ = 0;
-        cur_full_times_ = 0;
+        stream_max_.clear();
     }
     void SetMaxFullTimes(int times) { max_full_times_ = times; }
     void IncFullTimes() { cur_full_times_++; }
@@ -65,18 +61,19 @@ class Site {
             seperate_ = GetAllocatedBandwidth();
         }
     }
-    void AddStream(const Stream &stream) {
-        assert(stream.site_idx == id_);
+    void AddStream(const Stream &str) {
+        assert(str.site_idx == id_);
         bool flag = false;
         for (size_t cli_idx : ref_clients_) {
-            if (cli_idx == stream.cli_idx) {
+            if (cli_idx == str.cli_idx) {
                 flag = true;
                 break;
             }
         }
         assert(flag == true);
-        DecreaseBandwidth(stream.stream_size);
-        streams_.push_back(stream);
+        DecreaseBandwidth(str.stream_size);
+        stream_max_[str.stream_name] = max(stream_max_[str.stream_name], str.stream_size);
+        streams_.push_back(str);
     }
     void PrintClients() {
         auto refs = ref_clients_;
@@ -108,4 +105,5 @@ class Site {
     bool full_this_time_{false};
     // client idx | stream name | stream size
     list<Stream> streams_;
+    unordered_map<string, int> stream_max_;
 };
