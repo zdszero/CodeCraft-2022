@@ -39,11 +39,12 @@ class FileParser {
     }
 
     // 读取qos_contraint
-    void ParseConfig(int &constraint, int &base_cost) {
+    void ParseConfig(int &constraint, int &base_cost, double &center_cost) {
         FILE *fp = fopen(config_filename_.c_str(), "r");
         fscanf(fp, "%*[^\n]\n");
         fscanf(fp, "qos_constraint=%d\n", &constraint);
         fscanf(fp, "base_cost=%d\n", &base_cost);
+        fscanf(fp, "center_cost=%lf\n", &center_cost);
         fclose(fp);
     }
 

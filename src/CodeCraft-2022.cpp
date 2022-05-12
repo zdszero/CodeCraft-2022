@@ -36,6 +36,7 @@ private:
     FileParser file_parser_;
     int qos_constraint_;
     int base_cost_;
+    double center_cost_;
     vector<Site> sites_;
     vector<Client> clients_;
     vector<Demand> demands_; // demands all mtimes
@@ -66,7 +67,7 @@ private:
 
 void SystemManager::Init() {
     file_parser_.ParseSites(sites_);
-    file_parser_.ParseConfig(qos_constraint_, base_cost_);
+    file_parser_.ParseConfig(qos_constraint_, base_cost_, center_cost_);
     file_parser_.ParseQOS(clients_, qos_constraint_);
     // 向服务器中添加客户
     for (size_t i = 0; i < clients_.size(); i++) {
@@ -334,9 +335,9 @@ void SystemManager::Process() {
     //    for (auto &client : clients_) {
     //        client.Reset();
     //    }
-    sort(days.begin(), days.end(), [this](size_t l, size_t r) {
-        return demands_[l].GetTotalDemand() < demands_[r].GetTotalDemand();
-    });
+    // sort(days.begin(), days.end(), [this](size_t l, size_t r) {
+    //     return demands_[l].GetTotalDemand() < demands_[r].GetTotalDemand();
+    // });
 
     //    sort(days.begin(), days.end(),
     //         [&demands_copy](size_t l, size_t r) {
@@ -350,8 +351,10 @@ void SystemManager::Process() {
     }
     int grade = results_->GetGrade();
     printf("grade = %d\n", grade);
-    int ctr_grd = center_results_.GetGrade();
-    printf("center grade = %d\n", ctr_grd);
+    int center_grade = center_results_.GetGrade();
+    printf("center grade = %d\n", center_grade);
+    int total_grade = grade + center_grade * center_cost_;
+    printf("total grade = %d\n", total_grade);
     for (const auto &day_res : *results_) {
         WriteSchedule(day_res);
     }

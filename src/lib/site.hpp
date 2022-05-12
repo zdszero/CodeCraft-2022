@@ -42,7 +42,7 @@ class Site {
         assert(remain_bandwidth >= 0);
     }
     void Reset() {
-        remain_bandwidth = total_bandwidth_;
+        remain_bandwidth = total_bandwidth_ - GetAllocatedBandwidth() * 0.05;
         full_this_time_ = false;
         streams_.clear();
         stream_max_.clear();
