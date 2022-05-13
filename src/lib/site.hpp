@@ -75,6 +75,12 @@ class Site {
         stream_max_[str.stream_name] = max(stream_max_[str.stream_name], str.stream_size);
         streams_.push_back(str);
     }
+    int GetMaxStream(const string &name) {
+        if (!stream_max_.count(name)) {
+            return 0;
+        }
+        return stream_max_[name];
+    }
     void PrintClients() {
         auto refs = ref_clients_;
         sort(refs.begin(), refs.end());

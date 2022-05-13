@@ -34,6 +34,17 @@ public:
         res_[day].Init(sites);
         grades_[day] = res_[day].load_;
     }
+    void PrintGrade() {
+        auto gs = grades_;
+        sort(gs.begin(), gs.end());
+        int cnt = 0;
+        for (int g : gs) {
+            printf("%d ", g);
+            if (++cnt % 5 == 0) {
+                printf("\n");
+            }
+        }
+    }
     int GetGrade() {
         auto g = grades_;
         sort(g.begin(), g.end());
