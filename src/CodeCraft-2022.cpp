@@ -534,6 +534,9 @@ void SystemManager::AverageAllocate(Demand &d) {
     vector<Stream> streams;
     for (auto it = need.begin(); it != need.end(); it++) {
         for (size_t cli_idx = 0; cli_idx < it->second.size(); cli_idx++) {
+            if (it->second[cli_idx] == 0) {
+                continue;
+            }
             streams.push_back(Stream{cli_idx, 0, it->first, it->second[cli_idx]});
         }
     }
@@ -568,7 +571,8 @@ void SystemManager::AverageAllocate(Demand &d) {
             }
             grade = /*pow((used - base_cost_), 2) * 1.0
                     / (site.GetTotalBandwidth() * 1.0) + used;*/
-                (used * used - sep * sep - 2 * base_cost_ * (used - sep)) / (site.GetTotalBandwidth()) + (used - sep);
+                (used * used - sep * sep - 2 * base_cost_ * (used - sep)) / (site.GetTotalBandwidth()) + (used - sep)
+                + static_cast<int>(max(0, str.stream_size - site.GetMaxStream(str.stream_name)) * center_cost_);
             /* printf("site: %ld, grade: %ld\n", site_idx, grade); */
             if (grade <= min_grade) {
                 min_site = site_idx;
