@@ -175,27 +175,14 @@ void SystemManager::PresetMaxSites() {
     }
     // Sort by site capacity
     auto sites_copy = sites_;
-    sort(max_site_indexes.begin(), max_site_indexes.end(), //¼ÓÉÏ=ÓÐ±ä»¯
+    sort(max_site_indexes.begin(), max_site_indexes.end(),
          [&sites_copy](size_t l, size_t r) {
-             //            if(sites_copy[l].GetTotalBandwidth() ==
-             //               sites_copy[r].GetTotalBandwidth()) {
-             //                return sites_copy[l].GetRefTimes() > sites_copy[r].GetRefTimes();
-             //            }
-             return sites_copy[l].GetTotalBandwidth() > sites_copy[r].GetTotalBandwidth();
-             //            if(sites_copy[l].GetRefTimes() == sites_copy[r].GetRefTimes()) {
-             //                return sites_copy[l].GetTotalBandwidth() > sites_copy[r].GetTotalBandwidth();
-             //            }
-             //             return sites_copy[l].GetRefTimes() < sites_copy[r].GetRefTimes();
+             // return sites_copy[l].GetTotalBandwidth() > sites_copy[r].GetTotalBandwidth();
+             return sites_copy[l].GetRefTimes() > sites_copy[r].GetRefTimes();
          });
     sort(sites_copy.begin(), sites_copy.end(), [](const Site &l, const Site &r) {
-        //            if(l.GetTotalBandwidth() == r.GetTotalBandwidth()) {
-        //                return l.GetRefTimes() > r.GetRefTimes();
-        //            }
-        return l.GetTotalBandwidth() > r.GetTotalBandwidth();
-        //             if(l.GetRefTimes() == r.GetRefTimes()) {
-        //                return l.GetTotalBandwidth()> r.GetTotalBandwidth();
-        //            }
-        //             return l.GetRefTimes() < r.GetRefTimes();
+        // return l.GetTotalBandwidth() > r.GetTotalBandwidth();
+        return l.GetRefTimes() > r.GetRefTimes();
     });
 
     auto client_demands_cpy = client_demands_;
@@ -246,7 +233,7 @@ void SystemManager::PresetMaxSites() {
                 int maxv = -1;
                 for (size_t cli_idx : site.GetRefClients()) {
                     if (it->second[cli_idx] > maxv) {
-                        maxv = it->second[cli_idx];
+                        maxv += it->second[cli_idx];
                     }
                 }
                 maxs.push_back({it, maxv});
@@ -402,7 +389,7 @@ void SystemManager::GreedyAllocate(Demand &d, int day) {
             int maxv = -1;
             for (size_t cli_idx : site.GetRefClients()) {
                 if (it->second[cli_idx] > maxv) {
-                    maxv = it->second[cli_idx];
+                    maxv += it->second[cli_idx];
                 }
             }
             maxs.push_back({it, maxv});
