@@ -177,11 +177,21 @@ void SystemManager::PresetMaxSites() {
     auto sites_copy = sites_;
     sort(max_site_indexes.begin(), max_site_indexes.end(), [&sites_copy](size_t l, size_t r) {
         // return sites_copy[l].GetTotalBandwidth() > sites_copy[r].GetTotalBandwidth();
-        return sites_copy[l].GetRefTimes() > sites_copy[r].GetRefTimes();
+        int ltimes = sites_copy[l].GetRefTimes();
+        int rtimes = sites_copy[r].GetRefTimes();
+        if (ltimes != rtimes) {
+            return ltimes > rtimes;
+        }
+        return sites_copy[l].GetTotalBandwidth() > sites_copy[r].GetTotalBandwidth();
     });
     sort(sites_copy.begin(), sites_copy.end(), [](const Site &l, const Site &r) {
         // return l.GetTotalBandwidth() > r.GetTotalBandwidth();
-        return l.GetRefTimes() > r.GetRefTimes();
+        int ltimes = l.GetRefTimes();
+        int rtimes = r.GetRefTimes();
+        if (ltimes != rtimes) {
+            return ltimes > rtimes;
+        }
+        return l.GetTotalBandwidth() > r.GetTotalBandwidth();
     });
 
     auto client_demands_cpy = client_demands_;
