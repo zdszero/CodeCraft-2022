@@ -226,24 +226,22 @@ void SystemManager::PresetMaxSites() {
             site.Reset();
             auto &need = demand_copy[day].GetStreamDemands();
 
-            vector<pair<DemandIter, int>> maxs;
-            maxs.reserve(need.size());
+            vector<pair<DemandIter, int>> sums;
+            sums.reserve(need.size());
             for (auto it = need.begin(); it != need.end(); it++) {
-                int maxv = -1;
+                int sumv = 0;
                 for (size_t cli_idx : site.GetRefClients()) {
-                    if (it->second[cli_idx] > maxv) {
-                        maxv += it->second[cli_idx];
-                    }
+                    sumv += it->second[cli_idx];
                 }
-                maxs.push_back({it, maxv});
+                sums.push_back({it, sumv});
             }
-            std::sort(maxs.begin(), maxs.end(), [](const pair<DemandIter, int> &l, const pair<DemandIter, int> &r) {
+            std::sort(sums.begin(), sums.end(), [](const pair<DemandIter, int> &l, const pair<DemandIter, int> &r) {
                 return l.second > r.second;
             });
 
             vector<pair<size_t, int>> cli_strs;
             cli_strs.reserve(site.GetRefTimes());
-            for (const auto &p : maxs) {
+            for (const auto &p : sums) {
                 auto it = p.first;
                 cli_strs.clear();
                 for (size_t cli_idx : site.GetRefClients()) {
@@ -382,23 +380,21 @@ void SystemManager::GreedyAllocate(Demand &d, int day) {
         }
         auto &site = sites_[max_site_idx];
 
-        vector<pair<DemandIter, int>> maxs;
-        maxs.reserve(need.size());
+        vector<pair<DemandIter, int>> sums;
+        sums.reserve(need.size());
         for (auto it = need.begin(); it != need.end(); it++) {
-            int maxv = -1;
+            int sumv = 0;
             for (size_t cli_idx : site.GetRefClients()) {
-                if (it->second[cli_idx] > maxv) {
-                    maxv += it->second[cli_idx];
-                }
+                sumv += it->second[cli_idx];
             }
-            maxs.push_back({it, maxv});
+            sums.push_back({it, sumv});
         }
-        std::sort(maxs.begin(), maxs.end(),
+        std::sort(sums.begin(), sums.end(),
                   [](const pair<DemandIter, int> &l, const pair<DemandIter, int> &r) { return l.second > r.second; });
 
         vector<pair<size_t, int>> cli_strs;
         cli_strs.reserve(site.GetRefTimes());
-        for (const auto &p : maxs) {
+        for (const auto &p : sums) {
             auto it = p.first;
             cli_strs.clear();
             for (size_t cli_idx : site.GetRefClients()) {
@@ -465,23 +461,21 @@ void SystemManager::BaseAllocate(Demand &d) {
             continue;
         }
 
-        vector<pair<DemandIter, int>> maxs;
-        maxs.reserve(need.size());
+        vector<pair<DemandIter, int>> sums;
+        sums.reserve(need.size());
         for (auto it = need.begin(); it != need.end(); it++) {
-            int maxv = -1;
+            int sumv = 0;
             for (size_t cli_idx : site.GetRefClients()) {
-                if (it->second[cli_idx] > maxv) {
-                    maxv += it->second[cli_idx];
-                }
+                sumv += it->second[cli_idx];
             }
-            maxs.push_back({it, maxv});
+            sums.push_back({it, sumv});
         }
-        std::sort(maxs.begin(), maxs.end(),
+        std::sort(sums.begin(), sums.end(),
                   [](const pair<DemandIter, int> &l, const pair<DemandIter, int> &r) { return l.second > r.second; });
 
         vector<pair<size_t, int>> cli_strs;
         cli_strs.reserve(site.GetRefTimes());
-        for (const auto &p : maxs) {
+        for (const auto &p : sums) {
             auto it = p.first;
             cli_strs.clear();
             for (size_t cli_idx : site.GetRefClients()) {
