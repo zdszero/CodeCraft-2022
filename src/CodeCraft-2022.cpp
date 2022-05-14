@@ -195,21 +195,17 @@ void SystemManager::PresetMaxSites() {
             site.Reset();
             int cur_sum = 0;
             auto &need = demand_copy[day].GetStreamDemands();
-            vector<Stream> streams;
             for (auto it = need.begin(); it != need.end(); it++) {
                 for (size_t cli_idx : sites_[site_idx].GetRefClients()) {
-                    streams.push_back(Stream{cli_idx, 0, it->first, it->second[cli_idx]});
+                    int str_size = it->second[cli_idx];
+                    if (str_size == 0)
+                        continue;
+                    if (str_size / clients_[cli_idx].GetSiteCount() > site.GetRemainBandwidth()) {
+                        continue;
+                    }
+                    cur_sum += str_size / clients_[cli_idx].GetSiteCount();
+                    site.DecreaseBandwidth(str_size / clients_[cli_idx].GetSiteCount());
                 }
-            }
-            for (auto &s : streams) {
-                if (s.stream_size / clients_[s.cli_idx].GetSiteCount() > site.GetRemainBandwidth()) {
-                    continue;
-                }
-                if (s.stream_size == 0) {
-                    continue;
-                }
-                cur_sum += s.stream_size / clients_[s.cli_idx].GetSiteCount();
-                site.DecreaseBandwidth(s.stream_size / clients_[s.cli_idx].GetSiteCount());
             }
             if (cur_sum > 0) {
                 site_max_req.push({day, site_idx, cur_sum, sites_[site_idx].GetTotalBandwidth()});
