@@ -300,39 +300,19 @@ void SystemManager::Process() {
     for (size_t day_idx = 0; day_idx < demands_.size(); day_idx++) {
         days.push_back(day_idx);
     }
-
-    //    auto demands_copy = demands_;
-    //    for (int idx = 0; idx < demands_.size(); idx++) {
-    //        auto &d = demands_copy[idx];
-    //        for (auto &site : sites_) {
-    //            site.Reset();
-    //        }
-    //        for (auto &client : clients_) {
-    //            client.Reset();
-    //        }
-    //        GreedyAllocate(d, idx);
-    //    }
-    //
-    //    for (auto &site : sites_) {
-    //        site.Reset();
-    //    }
-    //    for (auto &client : clients_) {
-    //        client.Reset();
-    //    }
-    // sort(days.begin(), days.end(), [this](size_t l, size_t r) {
-    //     return demands_[l].GetTotalDemand() < demands_[r].GetTotalDemand();
-    // });
-
-    //    sort(days.begin(), days.end(),
-    //         [&demands_copy](size_t l, size_t r) {
-    //             return demands_copy[l].GetTotalDemand() >
-    //                     demands_copy[r].GetTotalDemand();
-    //         });
     for (size_t day_idx : days) {
         // for (size_t day_idx = 0; day_idx < demands_.size(); day_idx++) {
         auto &d = demands_[day_idx];
         Schedule(d, day_idx);
     }
+
+    // for (size_t times = 1; times <= 100; times++) {
+    //     results_->Migrate();
+    //     if (times % 10 == 0) {
+    //         results_->AdjustTop5();
+    //     }
+    // }
+
     int grade = results_->GetGrade();
     printf("grade = %d\n", grade);
     int center_grade = center_results_.GetGrade();
