@@ -452,79 +452,52 @@ void SystemManager::GreedyAllocate(Demand &d, int day) {
 
 void SystemManager::BaseAllocate(Demand &d) {
     auto &need = d.GetStreamDemands();
-    vector<size_t> site_indexes;
-    site_indexes.reserve(sites_.size());
-    for (size_t i = 0; i < sites_.size(); i++) {
-        site_indexes.push_back(i);
+    vector<pair<DemandIter, int>> sums;
+    sums.reserve(need.size());
+    for (auto it = need.begin(); it != need.end(); it++) {
+        int sumv = accumulate(it->second.begin(), it->second.end(), 0);
+        sums.push_back({it, sumv});
     }
-    std::sort(site_indexes.begin(), site_indexes.end(),
-              [this](size_t l, size_t r) { return sites_[l].GetRefTimes() > sites_[r].GetRefTimes(); });
+    std::sort(sums.begin(), sums.end(),
+              [](const pair<DemandIter, int> &l, const pair<DemandIter, int> &r) { return l.second > r.second; });
 
-    for (size_t site_idx : site_indexes) {
-        auto &site = sites_[site_idx];
-        if (site.IsFullThisTime()) {
-            continue;
+    set<size_t> sites;
+    for (auto &p : sums) {
+        auto it = p.first;
+        sites.clear();
+        for (size_t site_idx = 0; site_idx < sites_.size(); site_idx++) {
+            if (sites_[site_idx].IsFullThisTime()) {
+                continue;
+            }
+            sites.insert(site_idx);
         }
-
-        vector<pair<DemandIter, int>> sums;
-        sums.reserve(need.size());
-        for (auto it = need.begin(); it != need.end(); it++) {
-            int sumv = 0;
-            for (size_t cli_idx : site.GetRefClients()) {
-                sumv += it->second[cli_idx];
-            }
-            sums.push_back({it, sumv});
-        }
-        std::sort(sums.begin(), sums.end(),
-                  [](const pair<DemandIter, int> &l, const pair<DemandIter, int> &r) { return l.second > r.second; });
-
-        vector<pair<size_t, int>> cli_strs;
-        cli_strs.reserve(site.GetRefTimes());
-        for (const auto &p : sums) {
-            auto it = p.first;
-            cli_strs.clear();
-            for (size_t cli_idx : site.GetRefClients()) {
-                cli_strs.push_back({cli_idx, it->second[cli_idx]});
-            }
-            std::sort(cli_strs.begin(), cli_strs.end(),
-                      [](const pair<size_t, int> &l, const pair<size_t, int> &r) { return l.second < r.second; });
-            int i;
-            for (i = cli_strs.size() - 1; i >= 0; i--) {
-                size_t cli_idx = cli_strs[i].first;
-                int str_size = cli_strs[i].second;
-                if (str_size > site.GetSeperateBandwidth() - site.GetAllocatedBandwidth()) {
-                    break;
+        while (!sites.empty()) {
+            int best_grade = 0;
+            int best_site = -1;
+            for (size_t site_idx : sites) {
+                int grade = 0;
+                for (size_t cli_idx : sites_[site_idx].GetRefClients()) {
+                    grade += it->second[cli_idx];
                 }
-                if (str_size == 0) {
-                    goto next_round;
+                if (grade > best_grade) {
+                    best_grade = grade;
+                    best_site = site_idx;
                 }
-                // client_demands_cpy[day][cli_idx] = 0;
-                // it->second[cli_idx] = 0;
-                // site.DecreaseBandwidth(str_size);
-                auto s = Stream(cli_idx, site_idx, it->first, str_size);
-                site.AddStream(s);
-                clients_[cli_idx].AddStreamBySiteIndex(site_idx, s);
-                it->second[cli_idx] = 0;
             }
-            if (i >= 0) {
-                for (int j = 0; j < i; j++) {
-                    size_t cli_idx = cli_strs[j].first;
-                    int str_size = cli_strs[j].second;
-                    if (str_size > site.GetSeperateBandwidth() - site.GetAllocatedBandwidth()) {
-                        goto site_full;
-                    }
-                    if (str_size == 0) {
+            if (best_site == -1)
+                break;
+            if (best_grade <= sites_[best_site].GetSeperateBandwidth() - sites_[best_site].GetAllocatedBandwidth()) {
+                for (size_t cli_idx : sites_[best_site].GetRefClients()) {
+                    if (it->second[cli_idx] == 0)
                         continue;
-                    }
-                    auto s = Stream(cli_idx, site_idx, it->first, str_size);
-                    site.AddStream(s);
-                    clients_[cli_idx].AddStreamBySiteIndex(site_idx, s);
+                    auto s = Stream(cli_idx, best_site, it->first, it->second[cli_idx]);
+                    sites_[best_site].AddStream(s);
+                    clients_[cli_idx].AddStreamBySiteIndex(best_site, s);
                     it->second[cli_idx] = 0;
                 }
             }
-        next_round:;
+            sites.erase(best_site);
         }
-    site_full:;
     }
 }
 
