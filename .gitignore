@@ -8,3 +8,4 @@ cmake-build-debug
 src/cmake-build-debug
 .idea
 judge.py
+benchmark.py

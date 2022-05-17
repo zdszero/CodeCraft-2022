@@ -308,20 +308,25 @@ inline int ResultSet::GetGrade() {
     }
     printf("\n");
     int total = 0;
+    int zero_count = 0;
     for (size_t S = 0; S < seps_.size(); S++) {
         if (is_always_empty_[S]) {
+            zero_count++;
             continue;
         }
         total += seps_[S].first;
+        // if (seps_[S].first == 0) {
         if (seps_[S].first <= base_) {
-            grade += base_;
+            if (seps_[S].first > 0)
+                grade += base_;
         } else {
             grade += static_cast<int>(pow(1.0 * (seps_[S].first - base_), 2) /
                                       sites_caps_[S] +
                                       seps_[S].first);
         }
     }
-    printf("total:%d\n", total);
+    printf("zeros: %d\n", zero_count);
+    printf("total: %d\n", total);
     return grade;
 }
 

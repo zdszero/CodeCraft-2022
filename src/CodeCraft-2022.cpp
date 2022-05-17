@@ -37,6 +37,7 @@ class SystemManager {
     int base_cost_;
     double center_cost_;
     vector<Site> sites_;
+    vector<bool> site_used_;
     vector<Client> clients_;
     vector<Demand> demands_; // demands all mtimes
     vector<vector<int>> client_demands_;
@@ -68,6 +69,7 @@ void SystemManager::Init() {
     file_parser_.ParseSites(sites_);
     file_parser_.ParseConfig(qos_constraint_, base_cost_, center_cost_);
     file_parser_.ParseQOS(clients_, qos_constraint_);
+    site_used_.resize(sites_.size(), true);
     // 向服务器中添加客户
     for (size_t i = 0; i < clients_.size(); i++) {
         for (const auto site_idx : clients_[i].GetAccessibleSite()) {
@@ -209,15 +211,21 @@ void SystemManager::PresetMaxSites() {
                     int str_size = it->second[cli_idx];
                     if (str_size == 0)
                         continue;
-                    if (str_size / clients_[cli_idx].GetSiteCount() > site.GetRemainBandwidth()) {
+                    if (str_size > site.GetRemainBandwidth()) {
                         continue;
                     }
-                    cur_sum += str_size / clients_[cli_idx].GetSiteCount();
-                    site.DecreaseBandwidth(str_size / clients_[cli_idx].GetSiteCount());
+                    cur_sum += str_size;
                 }
             }
             if (cur_sum > 0) {
                 site_max_req.push({day, site_idx, cur_sum, sites_[site_idx].GetTotalBandwidth()});
+            }
+        }
+        if (!site_max_req.empty()) {
+            DailySite daily_site = site_max_req.top();
+            if (daily_site.GetTotal() < base_cost_ * 10) {
+                site_used_[daily_site.GetSiteIdx()] = false;
+                continue;
             }
         }
         for (int j = 0; j < (int)(demands_.size() * 0.05); j++) {
@@ -446,7 +454,7 @@ void SystemManager::BaseAllocate(Demand &d) {
         auto it = p.first;
         sites.clear();
         for (size_t site_idx = 0; site_idx < sites_.size(); site_idx++) {
-            if (sites_[site_idx].IsFullThisTime()) {
+            if (sites_[site_idx].IsFullThisTime() || !site_used_[site_idx]) {
                 continue;
             }
             sites.insert(site_idx);
@@ -509,6 +517,9 @@ void SystemManager::AverageAllocate(Demand &d) {
         int used = 0;
         int sep = 0;
         for (size_t site_idx : site_indexes) {
+            if (!site_used_[site_idx]) {
+                continue;
+            }
             auto &site = sites_[site_idx];
             if (site.GetRemainBandwidth() < str.stream_size) {
                 continue;
