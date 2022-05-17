@@ -224,7 +224,7 @@ void SystemManager::PresetMaxSites() {
         if (!site_max_req.empty()) {
             DailySite daily_site = site_max_req.top();
             if (daily_site.GetTotal() < base_cost_ * 10) {
-                site_used_[daily_site.GetSiteIdx()] = false;
+                site_used_[site_idx] = false;
                 continue;
             }
         }
@@ -314,11 +314,9 @@ void SystemManager::Process() {
         Schedule(d, day_idx);
     }
 
+    // results_->AdjustTop5();
     // for (size_t times = 1; times <= 100; times++) {
     //     results_->Migrate();
-    //     if (times % 10 == 0) {
-    //         results_->AdjustTop5();
-    //     }
     // }
 
     int grade = results_->GetGrade();

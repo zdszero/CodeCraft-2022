@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <list>
 #include <set>
 #include <string>
@@ -43,8 +44,9 @@ public:
     // migrate streams from server[From] to other accessible servers
     int Migrate(size_t from, vector<pair<int, size_t>> &seps,
                 vector<vector<size_t>> &cli_refs, int base, int base_cost,
-                vector<int> &sites_cap, int day, bool isSep) {
+                vector<int> &sites_cap, int day, bool isSep, vector<int> &max_acc) {
         int cur_load = site_loads_[from];
+        vector<int> moved(max_acc.size(), 0);
 
         for (auto it = site_streams_[from].begin();
              it != site_streams_[from].end();) {
@@ -57,6 +59,9 @@ public:
             // choose To server to move
             for (size_t candidate : cli_ref) {
                 if (candidate == from) {
+                    continue;
+                }
+                if (moved[candidate] + it->stream_size > max_acc[candidate]) {
                     continue;
                 }
                 // if server[To] used size is less than factor * cap
@@ -73,6 +78,7 @@ public:
                 it++;
                 continue;
             }
+            moved[To] += it->stream_size;
             cur_load -= it->stream_size;
             it = MoveStream(it, from, To);
             if (cur_load <= base) {
@@ -83,8 +89,9 @@ public:
         return cur_load;
     }
     int ExpelTop5Test(size_t from, int base, vector<pair<int, size_t>> &seps,
-                      vector<vector<size_t>> &cli_refs) {
+                      vector<vector<size_t>> &cli_refs, const vector<int> &max_acc) {
         int cur_load = site_loads_[from];
+        vector<int> all_moved(max_acc.size(), 0);
         for (auto it = site_streams_[from].begin();
              it != site_streams_[from].end();) {
             assert(it->site_idx == from);
@@ -94,6 +101,9 @@ public:
             // choose To server to move
             for (size_t candidate : cli_ref) {
                 if (candidate == from) {
+                    continue;
+                }
+                if (all_moved[candidate] + it->stream_size >= max_acc[candidate]) {
                     continue;
                 }
                 if (site_loads_[candidate] + it->stream_size <=
@@ -108,6 +118,7 @@ public:
                 continue;
             }
             cur_load -= it->stream_size;
+            all_moved[to] += it->stream_size;
             if (cur_load <= base) {
                 break;
             }
@@ -149,7 +160,8 @@ public:
         return cur_load;
     }
     void ExpelTop5(size_t from, int base, vector<pair<int, size_t>> &seps,
-                   vector<vector<size_t>> &cli_refs) {
+                   vector<vector<size_t>> &cli_refs, const vector<int> &max_acc) {
+        vector<int> all_moved(max_acc.size(), 0);
         for (auto it = site_streams_[from].begin();
              it != site_streams_[from].end();) {
             assert(it->site_idx == from);
@@ -159,6 +171,9 @@ public:
             // choose To server to move
             for (size_t candidate : cli_ref) {
                 if (candidate == from) {
+                    continue;
+                }
+                if (all_moved[candidate] + it->stream_size >= max_acc[candidate]) {
                     continue;
                 }
                 if (site_loads_[candidate] + it->stream_size <=
@@ -172,11 +187,17 @@ public:
                 it++;
                 continue;
             }
+            all_moved[to] += it->stream_size;
             it = MoveStream(it, from, to);
             if (site_loads_[from] <= base /*|| site_loads_[from] <= seps[from].first * 0.2*/) {
                 break;
             }
         }
+        // for (size_t i = 0; i < all_moved.size(); i++) {
+        //     if (all_moved[i] > 0)
+        //         printf("%d ", all_moved[i]);
+        // }
+        // printf("\n");
     }
 
     void UpdateTop5(size_t to, int base, vector<pair<int, size_t>> &seps,
@@ -367,9 +388,45 @@ inline void ResultSet::Migrate() {
             if (it->first <= base) {
                 break;
             }
+
+            vector<int> max_accept(sites_caps_.size(), numeric_limits<int>::max());
+            for (int N = 1; N <= 3; N++) {
+                if (day + N >= days_result_.size())
+                    break;
+                auto &next_res = days_result_[day + N];
+                int P = 1;
+                for (size_t k = 0; k < N; k++) {
+                    P *= 20;
+                }
+                for (size_t site_idx = 0; site_idx < sites_caps_.size(); site_idx++) {
+                    assert(next_res.site_loads_[site_idx] <= sites_caps_[site_idx]);
+                    max_accept[site_idx] =  min(max_accept[site_idx], 
+                            P * (sites_caps_[site_idx] - next_res.site_loads_[site_idx]));
+                }
+            }
+            auto origin_loads = days_result_[day].site_loads_;
             cur_used =
                     days_result_[day].Migrate(site_idx, seps_, cli_ref_sites_idx_,
-                                              base, base_, sites_caps_, day, isSep);
+                                              base, base_, sites_caps_, day, isSep, max_accept);
+            auto cur_loads = days_result_[day].site_loads_;
+            for (size_t site_idx = 0; site_idx < origin_loads.size(); site_idx++) {
+                int change = cur_loads[site_idx] - origin_loads[site_idx];
+                // if (change < -10000) {
+                //     printf("idx = %ld, origin = %d, cur = %d\n", site_idx, origin_loads[site_idx], cur_loads[site_idx]);
+                //     printf("change = %d\n", change);
+                // }
+                for (int N = 1; N <= 3; N++) {
+                    if (day + N >= days_result_.size())
+                        break;
+                    auto &next_res = days_result_[day + N];
+                    int P = 1;
+                    for (size_t k = 0; k < N; k++) {
+                        P *= 20;
+                    }
+                    next_res.site_loads_[site_idx] += (change / P);
+                    assert(next_res.site_loads_[site_idx] <= sites_caps_[site_idx]);
+                }
+            }
             isSep = false;
             if (cur_used >= base) {
                 base = cur_used;
@@ -400,20 +457,60 @@ inline void ResultSet::AdjustTop5() {
 //    }
 //    for (size_t site_idx = 0; site_idx < site_top5_days_.size(); site_idx++) {
         for (auto &p : site_top5_days_[site_idx]) {
+            vector<int> max_accept(sites_caps_.size(), numeric_limits<int>::max());
             size_t day = p.second;
-            if(days_result_[day].ExpelTop5Test(site_idx, base_,
-                                               seps_, cli_ref_sites_idx_) > seps_[site_idx].first) {
+            for (int N = 1; N <= 3; N++) {
+                if (day + N >= days_result_.size())
+                    break;
+                auto &next_res = days_result_[day + N];
+                int P = 1;
+                for (size_t k = 0; k < N; k++) {
+                    P *= 20;
+                }
+                for (size_t site_idx = 0; site_idx < sites_caps_.size(); site_idx++) {
+                    assert(next_res.site_loads_[site_idx] <= sites_caps_[site_idx]);
+                    max_accept[site_idx] =  min(max_accept[site_idx], 
+                            P * (sites_caps_[site_idx] - next_res.site_loads_[site_idx]));
+                }
+            }
+            // for (auto acc : max_accept) {
+            //     if (acc < 18888) {
+            //         printf("%d ", acc);
+            //     }
+            // }
+            // printf("\n");
+            auto origin_loads = days_result_[day].site_loads_;
+            if (days_result_[day].ExpelTop5Test(site_idx, base_,
+                                               seps_, cli_ref_sites_idx_, max_accept) > seps_[site_idx].first) {
                 continue;
             }
-            days_result_[day].ExpelTop5(site_idx, base_, seps_, cli_ref_sites_idx_);
-
+            days_result_[day].ExpelTop5(site_idx, base_, seps_, cli_ref_sites_idx_, max_accept);
+            auto cur_loads = days_result_[day].site_loads_;
+            for (size_t site_idx = 0; site_idx < origin_loads.size(); site_idx++) {
+                int change = cur_loads[site_idx] - origin_loads[site_idx];
+                // if (change < -10000) {
+                //     printf("idx = %ld, origin = %d, cur = %d\n", site_idx, origin_loads[site_idx], cur_loads[site_idx]);
+                //     printf("change = %d\n", change);
+                // }
+                for (int N = 1; N <= 3; N++) {
+                    if (day + N >= days_result_.size())
+                        break;
+                    auto &next_res = days_result_[day + N];
+                    int P = 1;
+                    for (size_t k = 0; k < N; k++) {
+                        P *= 20;
+                    }
+                    next_res.site_loads_[site_idx] += (change / P);
+                    assert(next_res.site_loads_[site_idx] <= sites_caps_[site_idx]);
+                }
+            }
         }
-        ComputeSomeSeps(ComputeJob::GET_5, site_idx);
-        for (auto &p : site_top5_days_[site_idx]) {
-            size_t day = p.second;
-            days_result_[day].UpdateTop5(site_idx, base_, seps_, cli_ref_sites_idx_,
-                                         site_refs_, sites_caps_);
-        }
+        // ComputeSomeSeps(ComputeJob::GET_5, site_idx);
+        // for (auto &p : site_top5_days_[site_idx]) {
+        //     size_t day = p.second;
+        //     days_result_[day].UpdateTop5(site_idx, base_, seps_, cli_ref_sites_idx_,
+        //                                  site_refs_, sites_caps_);
+        // }
     }
 }
 
