@@ -326,6 +326,9 @@ void SystemManager::Process() {
     int total_grade = grade + center_grade * center_cost_;
     printf("total grade = %d\n", total_grade);
     // center_results_.PrintGrade();
+
+    results_->PrintLoads();
+
     for (const auto &day_res : *results_) {
         WriteSchedule(day_res);
     }

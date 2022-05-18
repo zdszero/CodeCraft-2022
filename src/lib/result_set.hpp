@@ -269,7 +269,7 @@ class ResultSet {
 
 public:
     ResultSet() = default;
-    ResultSet(const vector<Site> &sites, vector<Client> &clis, int base)
+    ResultSet(vector<Site> &sites, vector<Client> &clis, int base)
             : base_(base) {
         sites_caps_.reserve(sites.size());
         site_refs_.reserve(sites.size());
@@ -281,6 +281,7 @@ public:
         for (const auto &cli : clis) {
             cli_ref_sites_idx_.push_back(cli.GetAccessibleSite());
         }
+        sites_ = sites;
     }
     void Migrate();
     void AdjustTop5();
@@ -294,7 +295,7 @@ public:
     ResultSetIter begin() { return days_result_.begin(); }
     ResultSetIter end() { return days_result_.end(); }
 
-    void PrintLoads();
+    void PrintLoads(bool all = false);
 
 private:
     vector<Result> days_result_;
@@ -302,6 +303,7 @@ private:
     // 没一台服务器，当前的<95分位值，对应的天>
     vector<pair<int, size_t>> seps_;
     vector<int> sites_caps_;
+    vector<Site> sites_;
     vector<vector<size_t>> site_refs_;
     // 每一个服务器，需要迁移的所有<流量大小，对应的天>
     // 从95分位值 到 FACTOR * 95分位值
@@ -640,7 +642,7 @@ inline void ResultSet::ComputeSomeSeps(ComputeJob job, size_t site_idx) {
     }
 }
 
-inline void ResultSet::PrintLoads() {
+inline void ResultSet::PrintLoads(bool all) {
     assert(not days_result_.empty());
     size_t site_count = days_result_[0].site_loads_.size();
     seps_.resize(site_count, {0, 0});
@@ -660,9 +662,20 @@ inline void ResultSet::PrintLoads() {
         size_t sep_idx = ceil(arr.size() * 0.95) - 1;
         seps_[site_idx] = arr[sep_idx];
         if (seps_[site_idx].first > base_) {
-            printf("site %ld loads:\n", site_idx);
-            for (auto &e : arr) {
-                printf("<%d,%ld> ", e.first, e.second);
+            if (all) {
+                printf("site %ld loads:\n", site_idx);
+                for (auto &e : arr) {
+                    printf("<%d,%ld> ", e.first, e.second);
+                }
+            } else {
+                printf("%3ld: ", site_idx);
+                auto &esep=  arr[sep_idx];
+                auto &e1=  arr[sep_idx + 1];
+                auto &e2=  arr[arr.size() - 1];
+                printf("sep: <%5d,%5ld>   min: <%5d,%5ld>   max: <%5d,%5ld>",
+                        esep.first, esep.second,
+                        e1.first, e1.second,
+                        e2.first, e2.second);
             }
             printf("\n");
         }
