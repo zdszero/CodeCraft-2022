@@ -19,11 +19,9 @@ class ResultSet;
 class Result {
     friend class ResultSet;
 
-public:
+  public:
     Result() = default;
-    explicit Result(size_t day, const vector<Client> &clients,
-                    const vector<Site> &sites)
-            : day_(day) {
+    explicit Result(size_t day, const vector<Client> &clients, const vector<Site> &sites) : day_(day) {
         cli_tbls_.reserve(clients.size());
         for (const auto &cli : clients) {
             cli_tbls_.push_back(cli.GetAllocationTable());
@@ -35,24 +33,18 @@ public:
             site_streams_.push_back(site.GetStreams());
         }
     }
-    size_t GetClientAccessibleSiteCount(size_t C) const {
-        return cli_tbls_[C].tbl.size();
-    }
-    const list<Stream> &GetAllocationTable(size_t C, size_t S) const {
-        return cli_tbls_[C].tbl[S];
-    }
+    size_t GetClientAccessibleSiteCount(size_t C) const { return cli_tbls_[C].tbl.size(); }
+    const list<Stream> &GetAllocationTable(size_t C, size_t S) const { return cli_tbls_[C].tbl[S]; }
     // migrate streams from server[From] to other accessible servers
-    int Migrate(size_t from, vector<pair<int, size_t>> &seps,
-                vector<vector<size_t>> &cli_refs, int base, int base_cost,
-                vector<int> &sites_cap, int day, bool isSep, vector<int> &max_acc) {
+    int Migrate(size_t from, vector<Site> *sites, vector<pair<int, size_t>> &seps, int base, int base_cost, int day,
+                bool isSep, vector<int> &max_acc) {
         int cur_load = site_loads_[from];
         vector<int> moved(max_acc.size(), 0);
 
-        for (auto it = site_streams_[from].begin();
-             it != site_streams_[from].end();) {
+        for (auto it = site_streams_[from].begin(); it != site_streams_[from].end();) {
             assert(it->site_idx == from);
             // which client is the stream from
-            auto &cli_ref = cli_refs[it->cli_idx];
+            auto &cli_ref = sites->at(it->cli_idx).GetRefClients();
             int To = -1;
             int min_free = numeric_limits<int>::max();
             /* int max_dec_cost = 0; */
@@ -65,8 +57,7 @@ public:
                     continue;
                 }
                 // if server[To] used size is less than factor * cap
-                int free = seps[candidate].first - site_loads_[candidate] -
-                           it->stream_size;
+                int free = seps[candidate].first - site_loads_[candidate] - it->stream_size;
                 if (free < min_free && free >= 0) {
                     min_free = free;
                     To = static_cast<int>(candidate);
@@ -88,15 +79,14 @@ public:
         }
         return cur_load;
     }
-    int ExpelTop5Test(size_t from, int base, vector<pair<int, size_t>> &seps,
-                      vector<vector<size_t>> &cli_refs, const vector<int> &max_acc) {
+    int ExpelTop5Test(size_t from, int base, vector<pair<int, size_t>> &seps, vector<Client> *clis,
+                      const vector<int> &max_acc) {
         int cur_load = site_loads_[from];
         vector<int> all_moved(max_acc.size(), 0);
-        for (auto it = site_streams_[from].begin();
-             it != site_streams_[from].end();) {
+        for (auto it = site_streams_[from].begin(); it != site_streams_[from].end();) {
             assert(it->site_idx == from);
             // which client is the stream from
-            auto &cli_ref = cli_refs[it->cli_idx];
+            auto &cli_ref = clis->at(it->cli_idx).GetAccessibleSite();
             int to = -1;
             // choose To server to move
             for (size_t candidate : cli_ref) {
@@ -106,8 +96,7 @@ public:
                 if (all_moved[candidate] + it->stream_size >= max_acc[candidate]) {
                     continue;
                 }
-                if (site_loads_[candidate] + it->stream_size <=
-                    seps[candidate].first) {
+                if (site_loads_[candidate] + it->stream_size <= seps[candidate].first) {
                     to = candidate;
                     break;
                 }
@@ -124,49 +113,15 @@ public:
             }
         }
         return cur_load;
-
     }
 
-    int ExpelTop5Test2(size_t from, int base, vector<pair<int, size_t>> &seps, vector<vector<size_t>> &cli_refs) {
-        int cur_load = site_loads_[from];
-        auto site_load_cpy = site_loads_;
+    void ExpelTop5(size_t from, int base, vector<pair<int, size_t>> &seps, vector<Client> *clis,
+                   const vector<int> &max_acc) {
+        vector<int> all_moved(max_acc.size(), 0);
         for (auto it = site_streams_[from].begin(); it != site_streams_[from].end();) {
             assert(it->site_idx == from);
-// which client is the stream from
-            auto &cli_ref = cli_refs[it->cli_idx];
-            int to = -1;
-// choose To server to move
-            for (size_t candidate : cli_ref) {
-                if (candidate == from) {
-                    continue;
-                }
-                if (site_load_cpy[candidate] + it->stream_size <= seps[candidate].first) {
-                    to = candidate;
-                    break;
-                }
-            }
-// if all other site's load is greater
-            if (to == -1) {
-                it++;
-                continue;
-            }
-            cur_load -= it->stream_size;
-            site_load_cpy[to] += it->stream_size;
-            it++;
-            if (cur_load <= base) {
-                break;
-            }
-        }
-        return cur_load;
-    }
-    void ExpelTop5(size_t from, int base, vector<pair<int, size_t>> &seps,
-                   vector<vector<size_t>> &cli_refs, const vector<int> &max_acc) {
-        vector<int> all_moved(max_acc.size(), 0);
-        for (auto it = site_streams_[from].begin();
-             it != site_streams_[from].end();) {
-            assert(it->site_idx == from);
             // which client is the stream from
-            auto &cli_ref = cli_refs[it->cli_idx];
+            auto &cli_ref = clis->at(it->cli_idx).GetAccessibleSite();
             int to = -1;
             // choose To server to move
             for (size_t candidate : cli_ref) {
@@ -176,8 +131,7 @@ public:
                 if (all_moved[candidate] + it->stream_size >= max_acc[candidate]) {
                     continue;
                 }
-                if (site_loads_[candidate] + it->stream_size <=
-                    seps[candidate].first) {
+                if (site_loads_[candidate] + it->stream_size <= seps[candidate].first) {
                     to = candidate;
                     break;
                 }
@@ -200,8 +154,7 @@ public:
         // printf("\n");
     }
 
-    void UpdateTop5(size_t to, int base, vector<pair<int, size_t>> &seps,
-                    vector<vector<size_t>> &cli_refs,
+    void UpdateTop5(size_t to, int base, vector<pair<int, size_t>> &seps, vector<vector<size_t>> &cli_refs,
                     vector<vector<size_t>> &site_refs, vector<int> &caps) {
         for (size_t cli_idx : site_refs[to]) {
             for (size_t from : cli_refs[cli_idx]) {
@@ -240,11 +193,10 @@ public:
                 }
             }
         }
-        End:;
+    End:;
     }
 
-    list<Stream>::iterator MoveStream(list<Stream>::iterator &it, size_t from,
-                                      size_t to) {
+    list<Stream>::iterator MoveStream(list<Stream>::iterator &it, size_t from, size_t to) {
         auto &cli_tbl = cli_tbls_[it->cli_idx];
         cli_tbl.MoveStream(*it, from, to);
         site_loads_[to] += it->stream_size;
@@ -254,7 +206,7 @@ public:
         return site_streams_[from].erase(it);
     }
 
-private:
+  private:
     size_t day_;
     vector<AllocationTable> cli_tbls_;
     vector<int> site_loads_;
@@ -267,50 +219,36 @@ class ResultSet {
     using ResultSetIter = vector<Result>::iterator;
     enum class ComputeJob { GET_GRADE, GET_95, GET_5 };
 
-public:
+  public:
     ResultSet() = default;
-    ResultSet(vector<Site> &sites, vector<Client> &clis, int base)
-            : base_(base) {
-        sites_caps_.reserve(sites.size());
-        site_refs_.reserve(sites.size());
-        for (const auto &site : sites) {
-            sites_caps_.push_back(site.GetTotalBandwidth());
-            site_refs_.push_back(site.GetRefClients());
-        }
-        cli_ref_sites_idx_.reserve(clis.size());
-        for (const auto &cli : clis) {
-            cli_ref_sites_idx_.push_back(cli.GetAccessibleSite());
-        }
-        sites_ = sites;
+    ResultSet(vector<Site> &sites, vector<Client> &clis, int base) : base_(base) {
+        clis_ = &clis;
+        sites_ = &sites;
     }
     void Migrate();
     void AdjustTop5();
     void Reserve(size_t n) { days_result_.reserve(n); }
     void Resize(size_t n) { days_result_.resize(n); }
     void AddResult(Result &&day_res) { days_result_.push_back(day_res); }
-    void SetResult(size_t day, Result &&day_res) {
-        days_result_[day] = move(day_res);
-    }
+    void SetResult(size_t day, Result &&day_res) { days_result_[day] = move(day_res); }
     int GetGrade();
     ResultSetIter begin() { return days_result_.begin(); }
     ResultSetIter end() { return days_result_.end(); }
 
     void PrintLoads(bool all = false);
 
-private:
+  private:
     vector<Result> days_result_;
-    vector<bool> is_always_empty_;
+    vector<Site> *sites_;
+    vector<Client> *clis_;
     // 没一台服务器，当前的<95分位值，对应的天>
     vector<pair<int, size_t>> seps_;
-    vector<int> sites_caps_;
-    vector<Site> sites_;
-    vector<vector<size_t>> site_refs_;
     // 每一个服务器，需要迁移的所有<流量大小，对应的天>
-    // 从95分位值 到 FACTOR * 95分位值
     vector<list<pair<int, size_t>>> site_migrate_days_;
+    // 从95分位值 到 FACTOR * 95分位值
     vector<list<pair<int, size_t>>> site_top5_days_;
-    vector<vector<size_t>> cli_ref_sites_idx_;
-    vector<int> site_cnt;
+    vector<bool> is_always_empty_;
+    vector<int> site_cnt_;
     int base_{0};
 
     void ComputeAllSeps(ComputeJob job);
@@ -343,8 +281,7 @@ inline int ResultSet::GetGrade() {
             if (seps_[S].first > 0)
                 grade += base_;
         } else {
-            grade += static_cast<int>(pow(1.0 * (seps_[S].first - base_), 2) /
-                                      sites_caps_[S] +
+            grade += static_cast<int>(pow(1.0 * (seps_[S].first - base_), 2) / sites_->at(S).GetTotalBandwidth() +
                                       seps_[S].first);
         }
     }
@@ -375,13 +312,13 @@ inline void ResultSet::Migrate() {
         };
         return getval(l) > getval(r);
     });
-//    sort(site_indexes.begin(), site_indexes.end(), [this](size_t l, size_t r) {
-//        return sites_caps_[l] < sites_caps_[r];
-//    });
+    //    sort(site_indexes.begin(), site_indexes.end(), [this](size_t l, size_t r) {
+    //        return sites_->at(l).GetTotalBandwidth() < sites_caps_[r];
+    //    });
 
     for (auto site_idx : site_indexes) {
         auto &site_mig_day = site_migrate_days_[site_idx];
-        int base = base_; /*max(base_, (int)(seps_[site_idx].first * 0.5)); *///
+        int base = base_; /*max(base_, (int)(seps_[site_idx].first * 0.5)); */ //
         int cur_used = 0;
         int sep_day = -1;
         bool isSep = true;
@@ -391,7 +328,7 @@ inline void ResultSet::Migrate() {
                 break;
             }
 
-            vector<int> max_accept(sites_caps_.size(), numeric_limits<int>::max());
+            vector<int> max_accept(sites_->size(), numeric_limits<int>::max());
             for (int N = 1; N <= 3; N++) {
                 if (day + N >= days_result_.size())
                     break;
@@ -400,22 +337,20 @@ inline void ResultSet::Migrate() {
                 for (size_t k = 0; k < N; k++) {
                     P *= 20;
                 }
-                for (size_t site_idx = 0; site_idx < sites_caps_.size(); site_idx++) {
-                    assert(next_res.site_loads_[site_idx] <= sites_caps_[site_idx]);
-                    max_accept[site_idx] =  min(max_accept[site_idx], 
-                            P * (sites_caps_[site_idx] - next_res.site_loads_[site_idx]));
+                for (size_t site_idx = 0; site_idx < sites_->size(); site_idx++) {
+                    assert(next_res.site_loads_[site_idx] <= sites_->at(site_idx).GetTotalBandwidth());
+                    max_accept[site_idx] = min(max_accept[site_idx], P * (sites_->at(site_idx).GetTotalBandwidth() -
+                                                                          next_res.site_loads_[site_idx]));
                 }
             }
             auto origin_loads = days_result_[day].site_loads_;
-            cur_used =
-                    days_result_[day].Migrate(site_idx, seps_, cli_ref_sites_idx_,
-                                              base, base_, sites_caps_, day, isSep, max_accept);
+            cur_used = days_result_[day].Migrate(site_idx, sites_, seps_, base, base_, day, isSep, max_accept);
             auto cur_loads = days_result_[day].site_loads_;
             for (size_t site_idx = 0; site_idx < origin_loads.size(); site_idx++) {
                 int change = cur_loads[site_idx] - origin_loads[site_idx];
                 // if (change < -10000) {
-                //     printf("idx = %ld, origin = %d, cur = %d\n", site_idx, origin_loads[site_idx], cur_loads[site_idx]);
-                //     printf("change = %d\n", change);
+                //     printf("idx = %ld, origin = %d, cur = %d\n", site_idx, origin_loads[site_idx],
+                //     cur_loads[site_idx]); printf("change = %d\n", change);
                 // }
                 for (int N = 1; N <= 3; N++) {
                     if (day + N >= days_result_.size())
@@ -426,7 +361,7 @@ inline void ResultSet::Migrate() {
                         P *= 20;
                     }
                     next_res.site_loads_[site_idx] += (change / P);
-                    assert(next_res.site_loads_[site_idx] <= sites_caps_[site_idx]);
+                    assert(next_res.site_loads_[site_idx] <= sites_->at(site_idx).GetTotalBandwidth());
                 }
             }
             isSep = false;
@@ -448,18 +383,16 @@ inline void ResultSet::Migrate() {
 inline void ResultSet::AdjustTop5() {
     ComputeAllSeps(ComputeJob::GET_5);
     vector<int> sites_idx(site_top5_days_.size(), 0);
-    for(int i = 0; i < site_top5_days_.size(); i++) {
+    for (int i = 0; i < site_top5_days_.size(); i++) {
         sites_idx.push_back(i);
     }
-    sort(sites_idx.begin(), sites_idx.end(), [this](size_t l, size_t r) {
-        return site_cnt[l] <site_cnt[r];
-    });
-    for(int i = 0; i < sites_idx.size() /2; i++) {
+    sort(sites_idx.begin(), sites_idx.end(), [this](size_t l, size_t r) { return site_cnt_[l] < site_cnt_[r]; });
+    for (int i = 0; i < sites_idx.size() / 2; i++) {
         int site_idx = sites_idx[i];
-//    }
-//    for (size_t site_idx = 0; site_idx < site_top5_days_.size(); site_idx++) {
+        //    }
+        //    for (size_t site_idx = 0; site_idx < site_top5_days_.size(); site_idx++) {
         for (auto &p : site_top5_days_[site_idx]) {
-            vector<int> max_accept(sites_caps_.size(), numeric_limits<int>::max());
+            vector<int> max_accept(sites_->size(), numeric_limits<int>::max());
             size_t day = p.second;
             for (int N = 1; N <= 3; N++) {
                 if (day + N >= days_result_.size())
@@ -469,10 +402,10 @@ inline void ResultSet::AdjustTop5() {
                 for (size_t k = 0; k < N; k++) {
                     P *= 20;
                 }
-                for (size_t site_idx = 0; site_idx < sites_caps_.size(); site_idx++) {
-                    assert(next_res.site_loads_[site_idx] <= sites_caps_[site_idx]);
-                    max_accept[site_idx] =  min(max_accept[site_idx], 
-                            P * (sites_caps_[site_idx] - next_res.site_loads_[site_idx]));
+                for (size_t site_idx = 0; site_idx < sites_->size(); site_idx++) {
+                    assert(next_res.site_loads_[site_idx] <= sites_->at(site_idx).GetTotalBandwidth());
+                    max_accept[site_idx] = min(max_accept[site_idx], P * (sites_->at(site_idx).GetTotalBandwidth() -
+                                                                          next_res.site_loads_[site_idx]));
                 }
             }
             // for (auto acc : max_accept) {
@@ -482,17 +415,17 @@ inline void ResultSet::AdjustTop5() {
             // }
             // printf("\n");
             auto origin_loads = days_result_[day].site_loads_;
-            if (days_result_[day].ExpelTop5Test(site_idx, base_,
-                                               seps_, cli_ref_sites_idx_, max_accept) > seps_[site_idx].first) {
+            if (days_result_[day].ExpelTop5Test(site_idx, base_, seps_, clis_, max_accept) >
+                seps_[site_idx].first) {
                 continue;
             }
-            days_result_[day].ExpelTop5(site_idx, base_, seps_, cli_ref_sites_idx_, max_accept);
+            days_result_[day].ExpelTop5(site_idx, base_, seps_, clis_, max_accept);
             auto cur_loads = days_result_[day].site_loads_;
             for (size_t site_idx = 0; site_idx < origin_loads.size(); site_idx++) {
                 int change = cur_loads[site_idx] - origin_loads[site_idx];
                 // if (change < -10000) {
-                //     printf("idx = %ld, origin = %d, cur = %d\n", site_idx, origin_loads[site_idx], cur_loads[site_idx]);
-                //     printf("change = %d\n", change);
+                //     printf("idx = %ld, origin = %d, cur = %d\n", site_idx, origin_loads[site_idx],
+                //     cur_loads[site_idx]); printf("change = %d\n", change);
                 // }
                 for (int N = 1; N <= 3; N++) {
                     if (day + N >= days_result_.size())
@@ -503,7 +436,7 @@ inline void ResultSet::AdjustTop5() {
                         P *= 20;
                     }
                     next_res.site_loads_[site_idx] += (change / P);
-                    assert(next_res.site_loads_[site_idx] <= sites_caps_[site_idx]);
+                    assert(next_res.site_loads_[site_idx] <= sites_->at(site_idx).GetTotalBandwidth());
                 }
             }
         }
@@ -515,7 +448,6 @@ inline void ResultSet::AdjustTop5() {
         // }
     }
 }
-
 
 inline void ResultSet::ComputeAllSeps(ComputeJob job) {
     assert(not days_result_.empty());
@@ -533,7 +465,7 @@ inline void ResultSet::ComputeAllSeps(ComputeJob job) {
         }
     }
     is_always_empty_.resize(site_count, false);
-    site_cnt = vector<int>(site_count, 0);
+    site_cnt_ = vector<int>(site_count, 0);
     for (size_t site_idx = 0; site_idx < site_count; site_idx++) {
         // load, day
         vector<pair<int, size_t>> arr;
@@ -543,9 +475,7 @@ inline void ResultSet::ComputeAllSeps(ComputeJob job) {
             arr.push_back({days_result_[day].site_loads_[site_idx], day});
         }
         sort(arr.begin(), arr.end(),
-             [](const pair<int, size_t> &l, const pair<int, size_t> &r) {
-                 return l.first < r.first;
-             });
+             [](const pair<int, size_t> &l, const pair<int, size_t> &r) { return l.first < r.first; });
         size_t sep_idx = ceil(arr.size() * 0.95) - 1;
         seps_[site_idx] = arr[sep_idx];
         if (arr.back().first == 0) {
@@ -578,10 +508,10 @@ inline void ResultSet::ComputeAllSeps(ComputeJob job) {
                     break;
                 }
             }
-            site_cnt[site_idx] = cnt;
-//            if (cnt >= arr.size() - sep_idx) {
-//                continue;
-//            }
+            site_cnt_[site_idx] = cnt;
+            //            if (cnt >= arr.size() - sep_idx) {
+            //                continue;
+            //            }
             /* printf("site idx %ld: ", site_idx); */
             for (size_t i = sep_idx + 1; i < arr.size(); i++) {
                 /* printf("<%d, %ld> ", arr[i].first, arr[i].second); */
@@ -591,7 +521,6 @@ inline void ResultSet::ComputeAllSeps(ComputeJob job) {
         }
     }
 }
-
 
 inline void ResultSet::ComputeSomeSeps(ComputeJob job, size_t site_idx) {
     if (job == ComputeJob::GET_95) {
@@ -607,9 +536,7 @@ inline void ResultSet::ComputeSomeSeps(ComputeJob job, size_t site_idx) {
         arr.push_back({days_result_[day].site_loads_[site_idx], day});
     }
     sort(arr.begin(), arr.end(),
-         [](const pair<int, size_t> &l, const pair<int, size_t> &r) {
-             return l.first < r.first;
-         });
+         [](const pair<int, size_t> &l, const pair<int, size_t> &r) { return l.first < r.first; });
     size_t sep_idx = ceil(arr.size() * 0.95) - 1;
     seps_[site_idx] = arr[sep_idx];
     if (arr.back().first == 0) {
@@ -656,9 +583,7 @@ inline void ResultSet::PrintLoads(bool all) {
             arr.push_back({days_result_[day].site_loads_[site_idx], day});
         }
         sort(arr.begin(), arr.end(),
-             [](const pair<int, size_t> &l, const pair<int, size_t> &r) {
-                 return l.first < r.first;
-             });
+             [](const pair<int, size_t> &l, const pair<int, size_t> &r) { return l.first < r.first; });
         size_t sep_idx = ceil(arr.size() * 0.95) - 1;
         seps_[site_idx] = arr[sep_idx];
         if (seps_[site_idx].first > base_) {
@@ -668,14 +593,12 @@ inline void ResultSet::PrintLoads(bool all) {
                     printf("<%d,%ld> ", e.first, e.second);
                 }
             } else {
-                printf("%3ld: ", site_idx);
-                auto &esep=  arr[sep_idx];
-                auto &e1=  arr[sep_idx + 1];
-                auto &e2=  arr[arr.size() - 1];
-                printf("sep: <%5d,%5ld>   min: <%5d,%5ld>   max: <%5d,%5ld>",
-                        esep.first, esep.second,
-                        e1.first, e1.second,
-                        e2.first, e2.second);
+                printf("%3ld %2s -- %d: ", site_idx, sites_->at(site_idx).GetName(), sites_->at(site_idx).GetRefTimes());
+                auto &esep = arr[sep_idx];
+                auto &e1 = arr[sep_idx + 1];
+                auto &e2 = arr[arr.size() - 1];
+                printf("sep: <%5d,%5ld>   min: <%5d,%5ld>   max: <%5d,%5ld>", esep.first, esep.second, e1.first,
+                       e1.second, e2.first, e2.second);
             }
             printf("\n");
         }
