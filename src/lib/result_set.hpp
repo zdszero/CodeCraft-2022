@@ -154,10 +154,9 @@ class Result {
         // printf("\n");
     }
 
-    void UpdateTop5(size_t to, int base, vector<pair<int, size_t>> &seps, vector<vector<size_t>> &cli_refs,
-                    vector<vector<size_t>> &site_refs, vector<int> &caps) {
-        for (size_t cli_idx : site_refs[to]) {
-            for (size_t from : cli_refs[cli_idx]) {
+    void UpdateTop5(size_t to, int base, vector<pair<int, size_t>> &seps, vector<Client> *clis, vector<Site> *sites) {
+        for (size_t cli_idx : sites->at(to).GetRefClients()) {
+            for (size_t from : clis->at(cli_idx).GetAccessibleSite()) {
                 if (from == to) {
                     continue;
                 }
@@ -172,7 +171,7 @@ class Result {
                     /* printf("site idx: %ld, from: %ld\n", str.site_idx, from);
                      */
                     assert(it->site_idx == from);
-                    if (site_loads_[to] + it->stream_size <= caps[to]) {
+                    if (site_loads_[to] + it->stream_size <= sites->at(to).GetTotalBandwidth()) {
                         auto next_it = next(it, 1);
                         Stream tmps = *it;
                         auto sit = site_streams_[from].begin();
@@ -186,7 +185,7 @@ class Result {
                         MoveStream(sit, from, to);
                         it = next_it;
                     }
-                    if (site_loads_[to] == caps[to]) {
+                    if (site_loads_[to] == sites->at(to).GetTotalBandwidth()) {
                         goto End;
                     }
                     it++;
@@ -248,7 +247,7 @@ class ResultSet {
     // 从95分位值 到 FACTOR * 95分位值
     vector<list<pair<int, size_t>>> site_top5_days_;
     vector<bool> is_always_empty_;
-    vector<int> site_cnt_;
+    vector<int> top5gaps_;
     int base_{0};
 
     void ComputeAllSeps(ComputeJob job);
@@ -382,13 +381,15 @@ inline void ResultSet::Migrate() {
 
 inline void ResultSet::AdjustTop5() {
     ComputeAllSeps(ComputeJob::GET_5);
-    vector<int> sites_idx(site_top5_days_.size(), 0);
-    for (int i = 0; i < site_top5_days_.size(); i++) {
-        sites_idx.push_back(i);
+    vector<int> site_indexes(sites_->size(), 0);
+    for (int i = 0; i < sites_->size(); i++) {
+        site_indexes.push_back(i);
     }
-    sort(sites_idx.begin(), sites_idx.end(), [this](size_t l, size_t r) { return site_cnt_[l] < site_cnt_[r]; });
-    for (int i = 0; i < sites_idx.size() / 2; i++) {
-        int site_idx = sites_idx[i];
+    std::sort(site_indexes.begin(), site_indexes.end(), [this](size_t l, size_t r) {
+        return site_top5_days_[l] > site_top5_days_[r];
+    });
+    for (int i = 0; i < site_indexes.size() / 3; i++) {
+        int site_idx = site_indexes[i];
         //    }
         //    for (size_t site_idx = 0; site_idx < site_top5_days_.size(); site_idx++) {
         for (auto &p : site_top5_days_[site_idx]) {
@@ -415,8 +416,7 @@ inline void ResultSet::AdjustTop5() {
             // }
             // printf("\n");
             auto origin_loads = days_result_[day].site_loads_;
-            if (days_result_[day].ExpelTop5Test(site_idx, base_, seps_, clis_, max_accept) >
-                seps_[site_idx].first) {
+            if (days_result_[day].ExpelTop5Test(site_idx, base_, seps_, clis_, max_accept) > seps_[site_idx].first) {
                 continue;
             }
             days_result_[day].ExpelTop5(site_idx, base_, seps_, clis_, max_accept);
@@ -435,7 +435,7 @@ inline void ResultSet::AdjustTop5() {
                     for (size_t k = 0; k < N; k++) {
                         P *= 20;
                     }
-                    next_res.site_loads_[site_idx] += (change / P);
+                    next_res.site_loads_[site_idx] += ceil(1.0 * change / P);
                     assert(next_res.site_loads_[site_idx] <= sites_->at(site_idx).GetTotalBandwidth());
                 }
             }
@@ -443,15 +443,14 @@ inline void ResultSet::AdjustTop5() {
         // ComputeSomeSeps(ComputeJob::GET_5, site_idx);
         // for (auto &p : site_top5_days_[site_idx]) {
         //     size_t day = p.second;
-        //     days_result_[day].UpdateTop5(site_idx, base_, seps_, cli_ref_sites_idx_,
-        //                                  site_refs_, sites_caps_);
+        //     days_result_[day].UpdateTop5(site_idx, base_, seps_, clis_, sites_);
         // }
     }
 }
 
 inline void ResultSet::ComputeAllSeps(ComputeJob job) {
     assert(not days_result_.empty());
-    size_t site_count = days_result_[0].site_loads_.size();
+    size_t site_count = sites_->size();
     seps_.resize(site_count, {0, 0});
     if (job == ComputeJob::GET_95) {
         site_migrate_days_.resize(site_count, list<pair<int, size_t>>{});
@@ -463,9 +462,10 @@ inline void ResultSet::ComputeAllSeps(ComputeJob job) {
         for (auto &l : site_top5_days_) {
             l.clear();
         }
+        top5gaps_.resize(site_count, 0);
+        fill(top5gaps_.begin(), top5gaps_.end(), 0);
     }
     is_always_empty_.resize(site_count, false);
-    site_cnt_ = vector<int>(site_count, 0);
     for (size_t site_idx = 0; site_idx < site_count; site_idx++) {
         // load, day
         vector<pair<int, size_t>> arr;
@@ -500,24 +500,10 @@ inline void ResultSet::ComputeAllSeps(ComputeJob job) {
             if (is_always_empty_[site_idx]) {
                 continue;
             }
-            int cnt = 0;
-            for (int i = static_cast<int>(sep_idx); i >= 0; i--) {
-                if (arr[sep_idx].first - arr[i].first < base_ / 2) {
-                    cnt++;
-                } else {
-                    break;
-                }
-            }
-            site_cnt_[site_idx] = cnt;
-            //            if (cnt >= arr.size() - sep_idx) {
-            //                continue;
-            //            }
-            /* printf("site idx %ld: ", site_idx); */
+            top5gaps_[site_idx] = arr[arr.size()-1].first - arr[sep_idx+1].first;
             for (size_t i = sep_idx + 1; i < arr.size(); i++) {
-                /* printf("<%d, %ld> ", arr[i].first, arr[i].second); */
                 site_top5_days_[site_idx].push_back(arr[i]);
             }
-            /* printf("\n"); */
         }
     }
 }
@@ -593,7 +579,8 @@ inline void ResultSet::PrintLoads(bool all) {
                     printf("<%d,%ld> ", e.first, e.second);
                 }
             } else {
-                printf("%3ld %2s -- %d: ", site_idx, sites_->at(site_idx).GetName(), sites_->at(site_idx).GetRefTimes());
+                printf("%3ld %2s -- %d: ", site_idx, sites_->at(site_idx).GetName(),
+                       sites_->at(site_idx).GetRefTimes());
                 auto &esep = arr[sep_idx];
                 auto &e1 = arr[sep_idx + 1];
                 auto &e2 = arr[arr.size() - 1];

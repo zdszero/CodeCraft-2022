@@ -53,11 +53,11 @@ class Site {
     bool IsFullThisTime() const { return full_this_time_; }
     void SetFullThisTime() { full_this_time_ = true; }
     void SetCurFullTimes(int full) { cur_full_times_ = 0; }
-    void ResetSeperateBandwidth() {
+    void ResetSeperateBandwidth(bool flag = true) {
         if (full_this_time_) {
             return;
         }
-        if (GetAllocatedBandwidth() > seperate_) {
+        if (GetAllocatedBandwidth() > seperate_ && flag) {
             seperate_ = GetAllocatedBandwidth();
         }
     }

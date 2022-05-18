@@ -44,6 +44,7 @@ class SystemManager {
     unique_ptr<ResultSet> results_;
     CenterResultSet center_results_;
     vector<vector<size_t>> daily_full_site_indexes_;
+    vector<set<size_t>> daily_full_site_set_;
 
     // 对于每一个时间戳的请求进行调度
     void Schedule(Demand &d, int day);
@@ -198,6 +199,7 @@ void SystemManager::PresetMaxSites() {
     auto client_demands_cpy = client_demands_;
     auto demand_copy = demands_;
     daily_full_site_indexes_.resize(demands_.size(), vector<size_t>());
+    daily_full_site_set_.resize(demands_.size(), set<size_t>());
     for (size_t site_idx : max_site_indexes) {
         auto site = sites_[site_idx];
         std::priority_queue<DailySite, std::vector<DailySite>, DailySiteCmp> site_max_req;
@@ -221,14 +223,14 @@ void SystemManager::PresetMaxSites() {
                 site_max_req.push({day, site_idx, cur_sum, sites_[site_idx].GetTotalBandwidth()});
             }
         }
-        if (!site_max_req.empty()) {
-            DailySite daily_site = site_max_req.top();
-            if (daily_site.GetTotal() < base_cost_ * 10) {
-                site_used_[site_idx] = false;
-                continue;
-            }
-        }
-        for (int j = 0; j < (int)(demands_.size() * 0.05); j++) {
+        // if (!site_max_req.empty()) {
+        //     DailySite daily_site = site_max_req.top();
+        //     if (daily_site.GetTotal() < base_cost_ * 10) {
+        //         site_used_[site_idx] = false;
+        //         continue;
+        //     }
+        // }
+        for (int j = 0; j < (int)(demands_.size() * 0.025); j++) {
             if (site_max_req.empty()) {
                 break;
             }
@@ -296,6 +298,7 @@ void SystemManager::PresetMaxSites() {
         site_full:;
 
             daily_full_site_indexes_[day].push_back(daily_site.GetSiteIdx());
+            daily_full_site_set_[day].insert(daily_site.GetSiteIdx());
             site_max_req.pop();
         }
     }
@@ -355,8 +358,12 @@ void SystemManager::Schedule(Demand &d, int day) {
     AverageAllocate(d);
 
     // update sites seperate value
-    for (auto &site : sites_) {
-        site.ResetSeperateBandwidth();
+    for (size_t site_idx = 0; site_idx < sites_.size(); site_idx++) {
+        auto &site = sites_[site_idx];
+        bool flag = true;
+        if (day > 1 && daily_full_site_set_[day-1].count(site_idx))
+            flag = false;
+        site.ResetSeperateBandwidth(flag);
     }
     // results_->AddResult(Result(clients_, sites_));
     results_->SetResult(day, Result(day, clients_, sites_));
