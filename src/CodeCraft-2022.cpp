@@ -17,7 +17,7 @@ using namespace std;
 using DemandIter = unordered_map<string, vector<int>>::iterator;
 
 class SystemManager {
-  public:
+public:
     SystemManager() = default;
     SystemManager(const string &output_filename) { output_fp_ = fopen(output_filename.c_str(), "w"); }
     ~SystemManager() {
@@ -30,7 +30,7 @@ class SystemManager {
     // 不断读取时间戳的请求并且处理
     void Process();
 
-  private:
+private:
     FILE *output_fp_{stdout};
     FileParser file_parser_;
     int qos_constraint_;
@@ -169,6 +169,10 @@ struct DailySiteCmp {
     bool operator()(const DailySite &a, const DailySite &b) { return a.GetTotal() < b.GetTotal(); }
 };
 
+struct DailySiteByDayCmp {
+    bool operator()(const DailySite &a, const DailySite &b) { return a.GetTime() > b.GetTime(); }
+};
+
 void SystemManager::PresetMaxSites() {
     std::vector<size_t> max_site_indexes;
     for (size_t i = 0; i < sites_.size(); i++) {
@@ -196,6 +200,7 @@ void SystemManager::PresetMaxSites() {
         return l.GetTotalBandwidth() > r.GetTotalBandwidth();
     });
 
+
     auto client_demands_cpy = client_demands_;
     auto demand_copy = demands_;
     daily_full_site_indexes_.resize(demands_.size(), vector<size_t>());
@@ -203,6 +208,8 @@ void SystemManager::PresetMaxSites() {
     for (size_t site_idx : max_site_indexes) {
         auto site = sites_[site_idx];
         std::priority_queue<DailySite, std::vector<DailySite>, DailySiteCmp> site_max_req;
+        std::priority_queue<DailySite, std::vector<DailySite>, DailySiteCmp> site_max_req_tem;
+        std::priority_queue<DailySite, std::vector<DailySite>, DailySiteByDayCmp> site_max_req_by_day;
         for (size_t day = 0; day < client_demands_cpy.size(); day++) {
 
             site.Reset();
@@ -221,8 +228,14 @@ void SystemManager::PresetMaxSites() {
             }
             if (cur_sum > 0) {
                 site_max_req.push({day, site_idx, cur_sum, sites_[site_idx].GetTotalBandwidth()});
+                site_max_req_tem.push({day, site_idx, cur_sum, sites_[site_idx].GetTotalBandwidth()});
             }
         }
+//        if (!site_max_req.empty() && site_max_req.top().GetTotal() < base_cost_ * 3) {
+//            sites_[site_max_req.top().GetSiteIdx()].SetTotalBandwidth(0);
+//            sites_[site_max_req.top().GetSiteIdx()].SetSeperateBandwidth(0);
+//            continue;
+//        }
         // if (!site_max_req.empty()) {
         //     DailySite daily_site = site_max_req.top();
         //     if (daily_site.GetTotal() < base_cost_ * 10) {
@@ -230,11 +243,55 @@ void SystemManager::PresetMaxSites() {
         //         continue;
         //     }
         // }
-        for (int j = 0; j < (int)(demands_.size() * 0.025); j++) {
+//        for (int j = 0; j < (int)(demands_.size() * 0.03); j++) {
+//            if (!site_max_req_tem.empty()) {
+//                site_max_req_by_day.push(site_max_req_tem.top());
+//                site_max_req_tem.pop();
+//            }
+//        }
+        int slot = 0;
+        int Used = 0;
+        set<int> hasDay;
+        vector<int> extra;
+        int max = (int)(demands_.size() * 0.05) - 1;
+        int day = -2;
+
+        for (int j = 0; j < (int)(demands_.size() * 0.05); j++) {
+            if (!site_max_req_tem.empty()) {
+                auto &daily_site = site_max_req_tem.top();
+                int day = daily_site.GetTime();
+                if (hasDay.count(day-1) && hasDay.count(day+1)) {
+                    slot = slot;
+                } else if (hasDay.count(day - 1) || hasDay.count(day + 1)) {
+                    slot++;
+                } else {
+                    slot += 2;
+                }
+
+                if (slot >= max) {
+                    break;
+                }
+                hasDay.insert(day);
+                site_max_req_tem.pop();
+            }
+        }
+
+        for (int i = 0; i < demands_.size(); i++) {
+            if (hasDay.count(i-1) && hasDay.count(i+1) && !hasDay.count(i)) {
+                extra.push_back(i);
+            }
+            if (extra.size() + hasDay.size() > max) {
+                break;
+            }
+        }
+
+//        if (!site_max_req.empty() && site_max_req.top().GetTotal() <= base_cost_ * 20) {
+//            sites_[site_max_req.top().GetSiteIdx()].SetTotalBandwidth(base_cost_ * 20);
+//        }
+        for (int j = 0; j < hasDay.size(); j++) {
             if (site_max_req.empty()) {
                 break;
             }
-
             DailySite daily_site = site_max_req.top();
             int day = daily_site.GetTime();
             auto site = sites_[daily_site.GetSiteIdx()];
@@ -293,13 +350,79 @@ void SystemManager::PresetMaxSites() {
                         site.DecreaseBandwidth(str_size);
                     }
                 }
-            next_round:;
+                next_round:;
             }
-        site_full:;
+            site_full:;
 
             daily_full_site_indexes_[day].push_back(daily_site.GetSiteIdx());
             daily_full_site_set_[day].insert(daily_site.GetSiteIdx());
             site_max_req.pop();
+        }
+        for (int j = 0; j < extra.size(); j++) {
+            DailySite daily_site = site_max_req.top();
+            int day = extra[j];
+            auto site = sites_[daily_site.GetSiteIdx()];
+            site.Reset();
+            auto &need = demand_copy[day].GetStreamDemands();
+
+            vector<pair<DemandIter, int>> sums;
+            sums.reserve(need.size());
+            for (auto it = need.begin(); it != need.end(); it++) {
+                int sumv = 0;
+                for (size_t cli_idx : site.GetRefClients()) {
+                    sumv += it->second[cli_idx];
+                }
+                sums.push_back({it, sumv});
+            }
+            std::sort(sums.begin(), sums.end(), [](const pair<DemandIter, int> &l, const pair<DemandIter, int> &r) {
+                return l.second > r.second;
+            });
+
+            vector<pair<size_t, int>> cli_strs;
+            cli_strs.reserve(site.GetRefTimes());
+            for (const auto &p : sums) {
+                auto it = p.first;
+                cli_strs.clear();
+                for (size_t cli_idx : site.GetRefClients()) {
+                    cli_strs.push_back({cli_idx, it->second[cli_idx]});
+                }
+                std::sort(cli_strs.begin(), cli_strs.end(),
+                          [](const pair<size_t, int> &l, const pair<size_t, int> &r) { return l.second < r.second; });
+                int i;
+                for (i = cli_strs.size() - 1; i >= 0; i--) {
+                    size_t cli_idx = cli_strs[i].first;
+                    int str_size = cli_strs[i].second;
+                    if (str_size > site.GetRemainBandwidth()) {
+                        break;
+                    }
+                    if (str_size == 0) {
+                        goto next_round1;
+                    }
+                    client_demands_cpy[day][cli_idx] = 0;
+                    it->second[cli_idx] = 0;
+                    site.DecreaseBandwidth(str_size);
+                }
+                if (i >= 0) {
+                    for (int j = 0; j < i; j++) {
+                        size_t cli_idx = cli_strs[j].first;
+                        int str_size = cli_strs[j].second;
+                        if (str_size > site.GetRemainBandwidth()) {
+                            goto site_full1;
+                        }
+                        if (str_size == 0) {
+                            continue;
+                        }
+                        client_demands_cpy[day][cli_idx] = 0;
+                        it->second[cli_idx] = 0;
+                        site.DecreaseBandwidth(str_size);
+                    }
+                }
+                next_round1:;
+            }
+            site_full1:;
+
+            daily_full_site_indexes_[day].push_back(daily_site.GetSiteIdx());
+            daily_full_site_set_[day].insert(daily_site.GetSiteIdx());
         }
     }
 }
@@ -317,10 +440,10 @@ void SystemManager::Process() {
         Schedule(d, day_idx);
     }
 
-    // results_->AdjustTop5();
-    // for (size_t times = 1; times <= 100; times++) {
-    //     results_->Migrate();
-    // }
+     // results_->AdjustTop5();
+     for (size_t times = 1; times <= 20; times++) {
+         // results_->Migrate();
+     }
 
     int grade = results_->GetGrade();
     printf("grade = %d\n", grade);
@@ -363,6 +486,11 @@ void SystemManager::Schedule(Demand &d, int day) {
         bool flag = true;
         if (day > 1 && daily_full_site_set_[day-1].count(site_idx))
             flag = false;
+        if (daily_full_site_set_[day].count(site_idx)) {
+            site.SetTEMSeprateBandwidth(base_cost_ * 3);
+        } else {
+            site.SetTEMSeprateBandwidth(0);
+        }
         site.ResetSeperateBandwidth(flag);
     }
     // results_->AddResult(Result(clients_, sites_));
@@ -437,9 +565,9 @@ void SystemManager::GreedyAllocate(Demand &d, int day) {
                     it->second[cli_idx] = 0;
                 }
             }
-        next_round:;
+            next_round:;
         }
-    site_full:
+        site_full:
 
         site.IncFullTimes();
         site.SetFullThisTime();
