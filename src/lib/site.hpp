@@ -15,11 +15,11 @@ class Site {
     friend class FileParser;
     friend class CenterResult;
 
-  public:
+public:
     Site() = default;
     Site(size_t id, const string &name, int bandwidth)
-        : id_(id), name_(name), total_bandwidth_(bandwidth),
-          remain_bandwidth(bandwidth) {}
+            : id_(id), name_(name), total_bandwidth_(bandwidth),
+              remain_bandwidth(bandwidth) {}
     const char *GetName() const { return name_.c_str(); }
     int GetRefTimes() const { return ref_times_; }
     int GetFullTimes() const { return cur_full_times_; }
@@ -28,8 +28,13 @@ class Site {
     int GetAllocatedBandwidth() const {
         return total_bandwidth_ - remain_bandwidth;
     }
-    int GetSeperateBandwidth() const { return static_cast<int>(seperate_); }
+    int GetSeperateBandwidth() const { return max(seperate_, tem_seperate); }
     void SetSeperateBandwidth(int sep) { seperate_ = sep; }
+    void SetTEMSeprateBandwidth(int sep) { tem_seperate = sep; }
+    void SetTotalBandwidth (int total) {
+        total_bandwidth_ = total;
+        remain_bandwidth = total;
+    }
     const vector<size_t> &GetRefClients() const { return ref_clients_; }
     vector<size_t> &GetRefClients() { return ref_clients_; }
 
@@ -97,7 +102,7 @@ class Site {
         }
     }
 
-  private:
+private:
     static constexpr double FACTOR = 0.8;
     size_t id_;
     string name_;
@@ -108,6 +113,7 @@ class Site {
     int max_full_times_{0};
     int cur_full_times_{0};
     int seperate_{0};
+    int tem_seperate{0};
     bool full_this_time_{false};
     // client idx | stream name | stream size
     list<Stream> streams_;
